@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v2: 修正 ETF 名稱解析
+v3: 加入解析異常警告 (print 到 log, 不寫 JSON)
 """
 
 import re
@@ -35,6 +35,10 @@ HEADERS = {
 
 
 def fetch_etf_holdings(etf_code, session, retries=3):
+    """
+    回傳 dict: name, holdings_date, holdings, skipped_rows
+    skipped_rows 是本 ETF 跳過的異常列清單
+    """
     url = MONEYDJ_URL.format(code=etf_code)
     for attempt in range(retries + 1):
         try:
@@ -52,24 +56,17 @@ def fetch_etf_holdings(etf_code, session, retries=3):
     soup = BeautifulSoup(r.text, "html.parser")
     text_all = soup.get_text(" ", strip=True)
 
-    # ===== 修正版 ETF 名稱解析 =====
-    etf_name = etf_code  # 預設 fallback
-    
-    # 方法 1: 從 <title> 標籤解析
-    # 例如: "主動野村臺灣優選-00980A.TW-ETF持股狀況 - MoneyDJ理財網"
+    # ETF 名稱解析 (v2 修正版)
+    etf_name = etf_code
     if soup.title:
         title_text = soup.title.get_text()
         m = re.match(r"^(.+?)-" + re.escape(etf_code) + r"\.TW", title_text)
         if m:
             etf_name = m.group(1).strip()
-    
-    # 方法 2 (備援): 從頁面內文搜尋 "XXXX〈00980A.TW〉" 的格式
     if etf_name == etf_code:
         m = re.search(r"([\u4e00-\u9fa5A-Za-z0-9]+?)[〈<\(]" + re.escape(etf_code) + r"\.TW[〉>\)]", text_all)
         if m:
             etf_name = m.group(1).strip()
-    
-    # 方法 3 (備援): 從頁面內文搜尋 "XXXX(00980A.TW)-全部持股" 格式
     if etf_name == etf_code:
         m = re.search(r"([\u4e00-\u9fa5A-Za-z0-9\-]+?)\(" + re.escape(etf_code) + r"\.TW\)\s*-\s*全部持股", text_all)
         if m:
@@ -89,32 +86,104 @@ def fetch_etf_holdings(etf_code, session, retries=3):
         raise ValueError("找不到持股表格")
 
     holdings = []
+    skipped_rows = []  # 收集本 ETF 異常列
+
     for tr in target_table.find_all("tr"):
         tds = tr.find_all("td")
         if len(tds) < 3:
             continue
-        stock_cell = tds[0].get_text(strip=True)
-        m2 = re.match(r"(.+?)\(([0-9A-Z]+)\.TW\)", stock_cell)
-        if not m2:
-            continue
-        stock_name = m2.group(1).strip().rstrip("*").strip()
-        stock_code = m2.group(2)
-        try:
-            weight = float(tds[1].get_text(strip=True))
-            shares = int(tds[2].get_text(strip=True).replace(",", "").replace(" ", ""))
-        except (ValueError, AttributeError):
-            continue
-        lots = shares // 1000
-        if lots < 1:
-            continue
-        holdings.append({
-            "code": stock_code,
-            "name": stock_name,
-            "lots": lots,
-            "weight": round(weight, 2),
-        })
 
-    return {"name": etf_name, "holdings_date": holdings_date, "holdings": holdings}
+        first_cell = tds[0]
+        stock_cell_text = first_cell.get_text(strip=True)
+
+        # 跳過表頭列 (包含「個股名稱」字樣)
+        if "個股名稱" in stock_cell_text or not stock_cell_text:
+            continue
+
+        # 嘗試 1: 文字含 "XXX(YYYY.TW)" 格式
+        m2 = re.match(r"(.+?)\(([0-9A-Z]+)\.TW\)", stock_cell_text)
+
+        # 嘗試 2: 從超連結的 href 取代號 (e.g. etfid=7751.TW)
+        if not m2:
+            link = first_cell.find("a")
+            if link and link.get("href"):
+                href = link["href"]
+                href_match = re.search(r"etfid=([0-9A-Z]+)\.TW", href)
+                if href_match:
+                    stock_code = href_match.group(1)
+                    stock_name = stock_cell_text.rstrip("*").strip() or "未知"
+                    m2 = True
+                    # 直接組結果,跳過下面的 m2.group 邏輯
+                    try:
+                        weight = float(tds[1].get_text(strip=True))
+                        shares = int(tds[2].get_text(strip=True).replace(",", "").replace(" ", ""))
+                    except (ValueError, AttributeError):
+                        # 權重或股數解析失敗,記錄後跳過
+                        skipped_rows.append({
+                            "raw_text": stock_cell_text,
+                            "weight_raw": tds[1].get_text(strip=True) if len(tds) > 1 else "",
+                            "shares_raw": tds[2].get_text(strip=True) if len(tds) > 2 else "",
+                            "reason": "權重或股數無法解析"
+                        })
+                        continue
+                    lots = shares // 1000
+                    if lots < 1:
+                        continue
+                    holdings.append({
+                        "code": stock_code,
+                        "name": stock_name,
+                        "lots": lots,
+                        "weight": round(weight, 2),
+                    })
+                    continue
+
+        # 嘗試 3: 都失敗 -> 記錄為異常列
+        if not m2:
+            try:
+                weight_raw = tds[1].get_text(strip=True)
+                shares_raw = tds[2].get_text(strip=True)
+            except Exception:
+                weight_raw = ""
+                shares_raw = ""
+            skipped_rows.append({
+                "raw_text": stock_cell_text or "(空白)",
+                "weight_raw": weight_raw,
+                "shares_raw": shares_raw,
+                "reason": "無代號格式"
+            })
+            continue
+
+        # 原本的 m2 匹配成功邏輯
+        if m2 is not True:
+            stock_name = m2.group(1).strip().rstrip("*").strip()
+            stock_code = m2.group(2)
+            try:
+                weight = float(tds[1].get_text(strip=True))
+                shares = int(tds[2].get_text(strip=True).replace(",", "").replace(" ", ""))
+            except (ValueError, AttributeError):
+                skipped_rows.append({
+                    "raw_text": stock_cell_text,
+                    "weight_raw": tds[1].get_text(strip=True),
+                    "shares_raw": tds[2].get_text(strip=True),
+                    "reason": "權重或股數無法解析"
+                })
+                continue
+            lots = shares // 1000
+            if lots < 1:
+                continue
+            holdings.append({
+                "code": stock_code,
+                "name": stock_name,
+                "lots": lots,
+                "weight": round(weight, 2),
+            })
+
+    return {
+        "name": etf_name,
+        "holdings_date": holdings_date,
+        "holdings": holdings,
+        "skipped_rows": skipped_rows,
+    }
 
 
 def fetch_prices_bulk_yfinance(codes):
@@ -208,6 +277,8 @@ def main():
     all_etf_data = {}
     all_stock_codes = set()
     failed = []
+    # 全部異常列的彙總 (for 最後一次報告)
+    all_skipped = []
 
     for i, code in enumerate(ETFS, 1):
         print(f"  [{i:2d}/{len(ETFS)}] {code}  ", end="", flush=True)
@@ -216,7 +287,20 @@ def main():
             all_etf_data[code] = data
             for h in data["holdings"]:
                 all_stock_codes.add(h["code"])
-            print(f"OK  {data['name'][:20]:20s}  ({data['holdings_date']})  {len(data['holdings']):3d} 檔")
+
+            skipped_count = len(data.get("skipped_rows", []))
+            warn_mark = f"  ⚠️ 跳過 {skipped_count} 列" if skipped_count > 0 else ""
+            print(f"OK  {data['name'][:20]:20s}  ({data['holdings_date']})  {len(data['holdings']):3d} 檔{warn_mark}")
+
+            # 即時印出本 ETF 的異常列明細
+            if skipped_count > 0:
+                for row in data["skipped_rows"]:
+                    print(f"      └─ 異常列: '{row['raw_text']}' | 權重={row['weight_raw']} | 股數={row['shares_raw']} | 原因={row['reason']}")
+                all_skipped.append({
+                    "etf": code,
+                    "etf_name": data["name"],
+                    "rows": data["skipped_rows"],
+                })
         except Exception as e:
             print(f"FAIL  {e}")
             failed.append(code)
@@ -262,12 +346,29 @@ def main():
     out_file.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     latest_file.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"\n完成:")
-    print(f"  ETF 成功: {len(snapshot['today'])}/{len(ETFS)}")
+    # ===== 最終報告 =====
+    print(f"\n{'='*60}")
+    print(f"執行結果")
+    print(f"{'='*60}")
+    print(f"  ETF 成功:   {len(snapshot['today'])}/{len(ETFS)}")
     if failed:
-        print(f"  失敗 ETF: {', '.join(failed)}")
-    print(f"  股票數: {len(all_stock_codes)}")
-    print(f"  價格數: {len(prices)}")
+        print(f"  ETF 失敗:   {', '.join(failed)}")
+    print(f"  股票數:     {len(all_stock_codes)}")
+    print(f"  價格數:     {len(prices)}")
+    print(f"  異常列總數: {sum(len(x['rows']) for x in all_skipped)}")
+
+    # 異常列總結 (再印一次,方便在 log 底部快速看到)
+    if all_skipped:
+        print(f"\n{'='*60}")
+        print(f"⚠️  資料完整性警告 ({len(all_skipped)} 檔 ETF 有異常列)")
+        print(f"{'='*60}")
+        for item in all_skipped:
+            print(f"\n📌 {item['etf']} ({item['etf_name']}):")
+            for row in item["rows"]:
+                print(f"   - '{row['raw_text']}' | 權重 {row['weight_raw']}% | 股數 {row['shares_raw']} | {row['reason']}")
+        print(f"\n建議: 到 MoneyDJ 網頁核對這些 ETF 後,手動補資料或通知我修正爬蟲\n")
+    else:
+        print(f"\n✅ 資料完整性:  無異常列\n")
 
 
 if __name__ == "__main__":
