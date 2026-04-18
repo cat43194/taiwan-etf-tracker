@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
+v2: 修正 ETF 名稱解析
 """
 
 import re
@@ -15,9 +16,6 @@ import requests
 from bs4 import BeautifulSoup
 
 
-# ============================================================
-# 追蹤 ETF 清單 (14 檔，未來新增只要加在這)
-# ============================================================
 ETFS = [
     "00980A", "00981A", "00982A", "00984A", "00985A",
     "00987A", "00991A", "00992A", "00993A", "00994A",
@@ -40,7 +38,7 @@ def fetch_etf_holdings(etf_code, session, retries=3):
     url = MONEYDJ_URL.format(code=etf_code)
     for attempt in range(retries + 1):
         try:
-            r = session.get(url, headers=HEADERS, timeout=30)
+            r = session.get(url, headers=HEADERS, timeout=60)
             r.raise_for_status()
             if r.apparent_encoding:
                 r.encoding = r.apparent_encoding
@@ -54,9 +52,28 @@ def fetch_etf_holdings(etf_code, session, retries=3):
     soup = BeautifulSoup(r.text, "html.parser")
     text_all = soup.get_text(" ", strip=True)
 
-    title = soup.title.get_text() if soup.title else ""
-    m = re.match(r"(.+?)\s*[-‧]\s*" + re.escape(etf_code), title)
-    etf_name = m.group(1).strip() if m else etf_code
+    # ===== 修正版 ETF 名稱解析 =====
+    etf_name = etf_code  # 預設 fallback
+    
+    # 方法 1: 從 <title> 標籤解析
+    # 例如: "主動野村臺灣優選-00980A.TW-ETF持股狀況 - MoneyDJ理財網"
+    if soup.title:
+        title_text = soup.title.get_text()
+        m = re.match(r"^(.+?)-" + re.escape(etf_code) + r"\.TW", title_text)
+        if m:
+            etf_name = m.group(1).strip()
+    
+    # 方法 2 (備援): 從頁面內文搜尋 "XXXX〈00980A.TW〉" 的格式
+    if etf_name == etf_code:
+        m = re.search(r"([\u4e00-\u9fa5A-Za-z0-9]+?)[〈<\(]" + re.escape(etf_code) + r"\.TW[〉>\)]", text_all)
+        if m:
+            etf_name = m.group(1).strip()
+    
+    # 方法 3 (備援): 從頁面內文搜尋 "XXXX(00980A.TW)-全部持股" 格式
+    if etf_name == etf_code:
+        m = re.search(r"([\u4e00-\u9fa5A-Za-z0-9\-]+?)\(" + re.escape(etf_code) + r"\.TW\)\s*-\s*全部持股", text_all)
+        if m:
+            etf_name = m.group(1).strip()
 
     m = re.search(r"資料日期[:：]\s*(\d{4}/\d{1,2}/\d{1,2})", text_all)
     holdings_date = m.group(1) if m else None
@@ -199,7 +216,7 @@ def main():
             all_etf_data[code] = data
             for h in data["holdings"]:
                 all_stock_codes.add(h["code"])
-            print(f"OK  {data['name'][:18]:18s}  ({data['holdings_date']})  {len(data['holdings']):3d} 檔")
+            print(f"OK  {data['name'][:20]:20s}  ({data['holdings_date']})  {len(data['holdings']):3d} 檔")
         except Exception as e:
             print(f"FAIL  {e}")
             failed.append(code)
