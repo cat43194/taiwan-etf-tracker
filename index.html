@@ -15,6 +15,33 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
 
+<!-- ============ 登入頁 ============ -->
+<div id="login-page" class="fixed inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/20 z-50 flex items-center justify-center p-4">
+  <div class="max-w-md w-full">
+    <div class="text-center mb-8">
+      <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-amber-500 to-rose-600 rounded-2xl flex items-center justify-center text-4xl shadow-2xl">📊</div>
+      <h1 class="text-2xl font-bold mb-2">台股主動式ETF 追蹤</h1>
+      <p class="text-sm text-slate-400">每日 19:00 自動更新 · 僅供授權對象使用</p>
+    </div>
+    <div class="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-2xl">
+      <label class="block text-sm text-slate-400 mb-2">請輸入存取密碼</label>
+      <input id="pwd-input" type="password" placeholder="••••••••"
+        class="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-amber-500 text-center tracking-widest"
+        autocomplete="off">
+      <button id="pwd-submit" class="w-full mt-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-semibold py-3 rounded-lg transition shadow-lg">
+        登入
+      </button>
+      <div id="pwd-error" class="hidden mt-3 text-center text-sm text-rose-400">❌ 密碼錯誤,請再試一次</div>
+    </div>
+    <div class="text-center mt-6 text-xs text-slate-600">
+      © 2026 · 密碼請洽授權窗口
+    </div>
+  </div>
+</div>
+
+<!-- ============ 主網站 ============ -->
+<div id="main-site" class="hidden">
+
 <header class="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-800">
   <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
     <div class="flex items-center gap-2">
@@ -24,7 +51,10 @@
         <div class="text-xs text-slate-400" id="header-sub">載入中...</div>
       </div>
     </div>
-    <div class="text-xs text-slate-300 bg-slate-800 px-3 py-1.5 rounded" id="update-info">—</div>
+    <div class="flex items-center gap-2">
+      <div class="text-xs text-slate-300 bg-slate-800 px-3 py-1.5 rounded" id="update-info">—</div>
+      <button onclick="logout()" class="text-xs text-slate-400 hover:text-rose-400 px-2 py-1">登出</button>
+    </div>
   </div>
   <div class="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto border-t border-slate-800 text-sm">
     <button data-tab="overview" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">總覽</button>
@@ -40,7 +70,6 @@
   <div class="text-center text-slate-400 py-20">載入中...</div>
 </main>
 
-<!-- Stock Modal -->
 <div id="stock-modal" class="hidden fixed inset-0 bg-black/80 z-50 items-center justify-center p-4" style="backdrop-filter: blur(4px);">
   <div id="modal-content" class="bg-slate-900 border border-slate-700 rounded-lg max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl"></div>
 </div>
@@ -49,7 +78,81 @@
   資料:MoneyDJ 持股 + Yahoo 收盤價 · 每日 19:00 自動更新 · 僅供參考不構成投資建議
 </footer>
 
+</div>
+
 <script>
+// ============================================================
+// 🔐 密碼設定區  (未來要改密碼就改這裡)
+// ============================================================
+// 支援多組密碼,任何一組都能登入。
+// 建議:自己用一組、客戶用另一組,方便追蹤哪組密碼外流
+// 密碼以 Base64 編碼儲存 (簡單混淆,不是真加密)
+//
+// 想改密碼:
+//   1. 打開 https://www.base64encode.org/
+//   2. 輸入你要的新密碼 → 按 Encode
+//   3. 把產生的字串貼到下面陣列對應位置
+// ============================================================
+const VALID_PASSWORDS = [
+  "RVRGLTIwMjYtY2F0",     // 你自己的密碼: ETF-2026-cat
+  "Y3VzdG9tZXItOTk5MA==", // 客戶用密碼: customer-9990
+];
+
+// 登入狀態儲存的 key
+const AUTH_KEY = 'etf_tracker_auth_v1';
+
+function checkAuth() {
+  const saved = localStorage.getItem(AUTH_KEY);
+  if (saved && VALID_PASSWORDS.includes(saved)) {
+    showMainSite();
+    return true;
+  }
+  return false;
+}
+
+function showMainSite() {
+  document.getElementById('login-page').classList.add('hidden');
+  document.getElementById('main-site').classList.remove('hidden');
+  loadData();
+}
+
+function logout() {
+  localStorage.removeItem(AUTH_KEY);
+  location.reload();
+}
+
+document.getElementById('pwd-submit').addEventListener('click', tryLogin);
+document.getElementById('pwd-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') tryLogin();
+});
+
+function tryLogin() {
+  const input = document.getElementById('pwd-input').value;
+  const encoded = btoa(input);
+  if (VALID_PASSWORDS.includes(encoded)) {
+    localStorage.setItem(AUTH_KEY, encoded);
+    showMainSite();
+  } else {
+    document.getElementById('pwd-error').classList.remove('hidden');
+    document.getElementById('pwd-input').value = '';
+    document.getElementById('pwd-input').focus();
+  }
+}
+
+// 自動 focus 密碼框
+setTimeout(() => {
+  const inp = document.getElementById('pwd-input');
+  if (inp) inp.focus();
+}, 100);
+
+// 頁面載入時先檢查有沒有登入過
+if (!checkAuth()) {
+  // 顯示登入頁 (預設就是顯示,不用做事)
+}
+
+// ============================================================
+// 以下是原本的網站邏輯,只在登入後才執行
+// ============================================================
 const TOP_N = 20;
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
 
@@ -98,12 +201,7 @@ function computeFlows(today, prev, prices) {
   return flows;
 }
 
-// ===== Stock Modal =====
-function openStockModal(code) {
-  modalStock = code;
-  renderModal();
-}
-
+function openStockModal(code) { modalStock = code; renderModal(); }
 function closeStockModal() {
   modalStock = null;
   document.getElementById('stock-modal').classList.add('hidden');
@@ -114,14 +212,11 @@ function renderModal() {
   const modal = document.getElementById('stock-modal');
   const content = document.getElementById('modal-content');
   if (!modalStock || !DATA) {
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-    return;
+    modal.classList.add('hidden'); modal.classList.remove('flex'); return;
   }
   const todayAgg = aggregate(DATA.today, DATA.prices||{});
   const stock = todayAgg[modalStock];
   if (!stock) { closeStockModal(); return; }
-
   const etfs = [...stock.etfs].sort((a,b) => b.lots - a.lots);
   const prev = aggregate(DATA.prev||{}, DATA.prices||{})[modalStock];
   const prevLots = prev ? prev.total_lots : 0;
@@ -167,10 +262,7 @@ function renderModal() {
             const d = e.lots - (pv?.lots || 0);
             return `<tr class="hover:bg-slate-800/30">
               <td class="px-3 py-2 text-slate-500">${i+1}</td>
-              <td class="px-3 py-2">
-                <div class="text-slate-200">${esc(e.etf_name)}</div>
-                <div class="text-xs text-slate-500">${esc(e.etf)}</div>
-              </td>
+              <td class="px-3 py-2"><div class="text-slate-200">${esc(e.etf_name)}</div><div class="text-xs text-slate-500">${esc(e.etf)}</div></td>
               <td class="px-3 py-2 text-right num font-semibold text-slate-100">${fmt(e.lots)}</td>
               <td class="px-3 py-2 text-right num text-xs ${d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500'}">${d!==0?(d>0?'+':'')+fmt(d):'—'}</td>
               <td class="px-3 py-2 text-right num text-xs text-slate-400">${e.weight}%</td>
@@ -179,32 +271,23 @@ function renderModal() {
         </tbody>
       </table>
     </div>
-    <div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">
-      按 ESC 鍵或點擊外部區域關閉
-    </div>`;
-
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
+    <div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>`;
+  modal.classList.remove('hidden'); modal.classList.add('flex');
 }
 
-// 關閉 modal: 點背景
 document.getElementById('stock-modal').addEventListener('click', e => {
   if (e.target.id === 'stock-modal') closeStockModal();
 });
-// 關閉 modal: ESC 鍵
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalStock) closeStockModal();
 });
 
-// ===== Main Render =====
 function render() {
   const main = document.getElementById('main');
   if (!DATA) {
     main.innerHTML = `<div class="max-w-lg mx-auto mt-16 text-center p-6 bg-slate-900 border border-slate-800 rounded-lg">
       <div class="text-rose-400 font-semibold mb-3 text-lg">⚠️ 尚無資料</div>
-      <p class="text-sm text-slate-400 mb-4 leading-relaxed">
-        GitHub Actions 還沒跑過第一次,<br>或 latest.json 尚未被 commit。
-      </p></div>`;
+      <p class="text-sm text-slate-400">GitHub Actions 還沒跑過第一次,<br>或 latest.json 尚未被 commit。</p></div>`;
     return;
   }
   const todayAgg = aggregate(DATA.today, DATA.prices||{});
@@ -250,8 +333,7 @@ function statCard(label, value, suffix, color) {
   const cls = {amber:'from-amber-500/20 to-amber-500/5 border-amber-500/30', sky:'from-sky-500/20 to-sky-500/5 border-sky-500/30', emerald:'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30', rose:'from-rose-500/20 to-rose-500/5 border-rose-500/30'}[color];
   return `<div class="bg-gradient-to-br ${cls} border rounded-lg p-3">
     <div class="text-xs text-slate-400 mb-1">${esc(label)}</div>
-    <div class="flex items-baseline gap-1"><div class="text-2xl font-bold">${fmt(value)}</div><div class="text-xs text-slate-400">${esc(suffix)}</div></div>
-  </div>`;
+    <div class="flex items-baseline gap-1"><div class="text-2xl font-bold">${fmt(value)}</div><div class="text-xs text-slate-400">${esc(suffix)}</div></div></div>`;
 }
 
 function dashCard(title, icon, color, inner) {
@@ -401,7 +483,6 @@ function renderStock(todayAgg, prevAgg) {
   const filtered = stockSearch.trim() ? all.filter(s => s.code.includes(stockSearch) || s.name.includes(stockSearch)) : all.sort((a,b)=>b.total_lots-a.total_lots).slice(0, 30);
   const detail = selectedStock && todayAgg[selectedStock];
   const prev = selectedStock && prevAgg[selectedStock];
-
   return `<h2 class="text-lg font-semibold mb-3">個股查詢</h2>
   <input id="stock-search" value="${esc(stockSearch)}" placeholder="輸入股票代號或名稱 (如 2330 或 台積電)" class="w-full md:max-w-md bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm mb-4 focus:outline-none focus:border-amber-500">
   <div class="grid md:grid-cols-2 gap-4">
@@ -455,10 +536,12 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => { currentTab = btn.dataset.tab; render(); });
 });
 
-fetch('./latest.json?t=' + Date.now())
-  .then(r => { if (!r.ok) throw new Error('404'); return r.json(); })
-  .then(d => { DATA = d; render(); })
-  .catch(() => { DATA = null; render(); });
+function loadData() {
+  fetch('./latest.json?t=' + Date.now())
+    .then(r => { if (!r.ok) throw new Error('404'); return r.json(); })
+    .then(d => { DATA = d; render(); })
+    .catch(() => { DATA = null; render(); });
+}
 </script>
 
 </body>
