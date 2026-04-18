@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股主動式ETF 追蹤</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: 'Microsoft JhengHei', 'PingFang TC', -apple-system, sans-serif; }
+  .tab-active { border-bottom-color: #f59e0b !important; color: #fbbf24 !important; }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+<header class="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-800">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+    <div class="flex items-center gap-2">
+      <div class="w-9 h-9 bg-gradient-to-br from-amber-500 to-rose-600 rounded-lg flex items-center justify-center">📊</div>
+      <div>
+        <div class="font-bold text-sm">台股主動式ETF 追蹤</div>
+        <div class="text-xs text-slate-400" id="header-sub">載入中...</div>
+      </div>
+    </div>
+    <div class="text-xs text-slate-300 bg-slate-800 px-3 py-1.5 rounded" id="update-info">—</div>
+  </div>
+  <div class="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto border-t border-slate-800 text-sm">
+    <button data-tab="overview" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">總覽</button>
+    <button data-tab="buy" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">買超 TOP 20</button>
+    <button data-tab="sell" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">賣超 TOP 20</button>
+    <button data-tab="mv" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">市值 TOP 20</button>
+    <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
+    <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
+  </div>
+</header>
+
+<main id="main" class="max-w-7xl mx-auto px-4 py-5">
+  <div class="text-center text-slate-400 py-20">載入中...</div>
+</main>
+
+<footer class="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-slate-500 border-t border-slate-800 mt-10">
+  資料：MoneyDJ 持股 + Yahoo 收盤價 · 每日 19:00 自動更新 · 僅供參考不構成投資建議
+</footer>
+
+<script>
+const TOP_N = 20;
+let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null;
+
+const fmt = (n, d=0) => (n==null||isNaN(n)) ? '-' : Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtM = (n) => {
+  if (n==null||isNaN(n)) return '-';
+  if (Math.abs(n)>=1e8) return (n/1e8).toFixed(2)+'億';
+  if (Math.abs(n)>=1e4) return (n/1e4).toFixed(1)+'萬';
+  return fmt(n);
+};
+const esc = s => String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+function aggregate(snapshot, prices) {
+  const map = {};
+  Object.entries(snapshot||{}).forEach(([etfCode, etf]) => {
+    (etf.holdings||[]).forEach(h => {
+      if (!map[h.code]) map[h.code] = { code: h.code, name: h.name, total_lots: 0, etfs: [] };
+      map[h.code].total_lots += (h.lots||0);
+      map[h.code].etfs.push({ etf: etfCode, etf_name: etf.name, lots: h.lots, weight: h.weight });
+    });
+  });
+  Object.values(map).forEach(s => {
+    s.price = prices[s.code] ?? null;
+    s.market_value = s.price ? s.total_lots * 1000 * s.price : null;
+    s.etf_count = s.etfs.length;
+  });
+  return map;
+}
+
+function computeFlows(today, prev, prices) {
+  const keys = new Set([...Object.keys(today), ...Object.keys(prev)]);
+  const flows = [];
+  keys.forEach(code => {
+    const t = today[code], p = prev[code];
+    const today_lots = t?t.total_lots:0, prev_lots = p?p.total_lots:0;
+    const diff = today_lots - prev_lots;
+    const price = prices[code] ?? null;
+    flows.push({
+      code, name: (t&&t.name)||(p&&p.name)||code,
+      today_lots, prev_lots, diff,
+      diff_pct: prev_lots>0 ? (diff/prev_lots)*100 : (today_lots>0?999:0),
+      price, diff_value: price ? diff*1000*price : null,
+      etf_count: t ? t.etf_count : 0,
+    });
+  });
+  return flows;
+}
+
+function render() {
+  const main = document.getElementById('main');
+  if (!DATA) {
+    main.innerHTML = `<div class="max-w-lg mx-auto mt-16 text-center p-6 bg-slate-900 border border-slate-800 rounded-lg">
+      <div class="text-rose-400 font-semibold mb-3 text-lg">⚠️ 尚無資料</div>
+      <p class="text-sm text-slate-400 mb-4 leading-relaxed">
+        GitHub Actions 還沒跑過第一次,<br>或 latest.json 尚未被 commit。
+      </p>
+      <p class="text-xs text-slate-500">
+        請到 repo 的 Actions 分頁<br>
+        手動觸發一次「Daily ETF Fetch」,<br>
+        完成後 1-2 分鐘重新整理此頁。
+      </p></div>`;
+    return;
+  }
+  const todayAgg = aggregate(DATA.today, DATA.prices||{});
+  const prevAgg = aggregate(DATA.prev||{}, DATA.prices||{});
+  const flows = computeFlows(todayAgg, prevAgg, DATA.prices||{});
+  const buy = flows.filter(f=>f.diff>0).sort((a,b)=>b.diff-a.diff).slice(0, TOP_N);
+  const sell = flows.filter(f=>f.diff<0).sort((a,b)=>a.diff-b.diff).slice(0, TOP_N);
+  const mv = Object.values(todayAgg).filter(s=>s.market_value!=null).sort((a,b)=>b.market_value-a.market_value).slice(0, TOP_N);
+  
+  document.getElementById('header-sub').textContent = `${Object.keys(DATA.today).length} 檔 ETF · ${Object.keys(todayAgg).length} 檔個股`;
+  document.getElementById('update-info').innerHTML = `📅 ${DATA.today_date} <span class="text-slate-500">vs</span> ${DATA.prev_date||'—'}`;
+  
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('tab-active', btn.dataset.tab === currentTab);
+  });
+  
+  if (currentTab === 'overview') main.innerHTML = renderOverview(todayAgg, buy, sell, mv);
+  else if (currentTab === 'buy') main.innerHTML = renderFlowTable(buy, 'buy');
+  else if (currentTab === 'sell') main.innerHTML = renderFlowTable(sell, 'sell');
+  else if (currentTab === 'mv') main.innerHTML = renderMV(mv, Object.values(todayAgg).reduce((s,r)=>s+(r.market_value||0),0));
+  else if (currentTab === 'etf') { main.innerHTML = renderETF(); bindEtf(); }
+  else if (currentTab === 'stock') { main.innerHTML = renderStock(todayAgg, prevAgg); bindStock(todayAgg, prevAgg); }
+}
+
+function renderOverview(todayAgg, buy, sell, mv) {
+  const totalMV = Object.values(todayAgg).reduce((s,r)=>s+(r.market_value||0),0);
+  return `
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+    ${statCard('追蹤 ETF', Object.keys(DATA.today).length, '檔', 'amber')}
+    ${statCard('持股個股', Object.keys(todayAgg).length, '檔', 'sky')}
+    ${statCard('今日買超', buy.length, '檔(TOP20)', 'emerald')}
+    ${statCard('今日賣超', sell.length, '檔(TOP20)', 'rose')}
+  </div>
+  <div class="grid lg:grid-cols-3 gap-4">
+    ${dashCard('買超 TOP 20', '📈', 'emerald', miniFlow(buy, 'buy'))}
+    ${dashCard('賣超 TOP 20', '📉', 'rose', miniFlow(sell, 'sell'))}
+    ${dashCard('市值 TOP 20', '💰', 'amber', miniMV(mv, totalMV))}
+  </div>`;
+}
+
+function statCard(label, value, suffix, color) {
+  const cls = {amber:'from-amber-500/20 to-amber-500/5 border-amber-500/30', sky:'from-sky-500/20 to-sky-500/5 border-sky-500/30', emerald:'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30', rose:'from-rose-500/20 to-rose-500/5 border-rose-500/30'}[color];
+  return `<div class="bg-gradient-to-br ${cls} border rounded-lg p-3">
+    <div class="text-xs text-slate-400 mb-1">${esc(label)}</div>
+    <div class="flex items-baseline gap-1"><div class="text-2xl font-bold">${fmt(value)}</div><div class="text-xs text-slate-400">${esc(suffix)}</div></div>
+  </div>`;
+}
+
+function dashCard(title, icon, color, inner) {
+  const text = {emerald:'text-emerald-400', rose:'text-rose-400', amber:'text-amber-400'}[color];
+  return `<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-800 font-semibold text-sm ${text}">${icon} ${esc(title)}</div>
+    <div>${inner}</div></div>`;
+}
+
+function miniFlow(rows, dir) {
+  if (!rows.length) return '<div class="p-4 text-sm text-slate-500 text-center">無資料</div>';
+  const color = dir === 'buy' ? 'text-emerald-400' : 'text-rose-400';
+  return '<div class="divide-y divide-slate-800">' + rows.map((r,i) => `
+    <div class="px-4 py-2 flex items-center justify-between text-sm">
+      <div class="flex items-center gap-2 min-w-0 flex-1">
+        <span class="text-xs text-slate-500 w-6">${i+1}</span>
+        <span class="text-slate-300 truncate">${esc(r.name)}</span>
+        <span class="text-xs text-slate-500">${esc(r.code)}</span>
+      </div>
+      <span class="num font-semibold ${color} flex-shrink-0">${r.diff>0?'+':''}${fmt(r.diff)}</span>
+    </div>`).join('') + '</div>';
+}
+
+function miniMV(rows, total) {
+  if (!rows.length) return '<div class="p-4 text-sm text-slate-500 text-center">無資料</div>';
+  return '<div class="divide-y divide-slate-800">' + rows.map((r,i) => `
+    <div class="px-4 py-2 flex items-center justify-between text-sm">
+      <div class="flex items-center gap-2 min-w-0 flex-1">
+        <span class="text-xs text-slate-500 w-6">${i+1}</span>
+        <span class="text-slate-300 truncate">${esc(r.name)}</span>
+        <span class="text-xs text-slate-500">${esc(r.code)}</span>
+      </div>
+      <span class="num text-amber-400 font-semibold flex-shrink-0">${fmtM(r.market_value)}</span>
+    </div>`).join('') + '</div>';
+}
+
+function renderFlowTable(rows, dir) {
+  const color = dir === 'buy' ? 'emerald' : 'rose';
+  const label = dir === 'buy' ? '買超' : '賣超';
+  return `<h2 class="text-lg font-semibold mb-3">${label} TOP ${TOP_N} (單位:張)</h2>
+  <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-800/50 text-slate-400 text-xs">
+        <tr><th class="px-2 py-2 text-left">#</th><th class="px-2 py-2 text-left">股票</th>
+        <th class="px-2 py-2 text-right">昨日張</th><th class="px-2 py-2 text-right">今日張</th>
+        <th class="px-2 py-2 text-right">增減</th><th class="px-2 py-2 text-right">%</th>
+        <th class="px-2 py-2 text-right">變動金額</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        ${rows.map((r,i) => `<tr class="hover:bg-slate-800/30">
+          <td class="px-2 py-2 text-slate-500">${i+1}</td>
+          <td class="px-2 py-2"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)} · ${r.etf_count}檔持有</div></td>
+          <td class="px-2 py-2 text-right num text-slate-400">${fmt(r.prev_lots)}</td>
+          <td class="px-2 py-2 text-right num">${fmt(r.today_lots)}</td>
+          <td class="px-2 py-2 text-right num font-semibold text-${color}-400">${r.diff>0?'+':''}${fmt(r.diff)}</td>
+          <td class="px-2 py-2 text-right num text-xs text-${color}-400">${r.diff_pct>900?'新進':(r.diff>0?'+':'')+r.diff_pct.toFixed(1)+'%'}</td>
+          <td class="px-2 py-2 text-right num text-xs text-${color}-400">${r.diff_value!=null?(r.diff>0?'+':'')+fmtM(r.diff_value):'-'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderMV(rows, total) {
+  return `<h2 class="text-lg font-semibold mb-3">合計市值 TOP ${TOP_N}</h2>
+  <div class="text-sm text-slate-400 mb-3">所有 ETF 合計市值:<span class="text-amber-400 font-semibold ml-2">${fmtM(total)}</span></div>
+  <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-800/50 text-slate-400 text-xs">
+        <tr><th class="px-2 py-2 text-left">#</th><th class="px-2 py-2 text-left">股票</th>
+        <th class="px-2 py-2 text-right">總張數</th><th class="px-2 py-2 text-right">收盤價</th>
+        <th class="px-2 py-2 text-right">合計市值</th><th class="px-2 py-2 text-right">佔比</th>
+        <th class="px-2 py-2 text-center">ETF</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        ${rows.map((r,i) => `<tr class="hover:bg-slate-800/30">
+          <td class="px-2 py-2 text-slate-500">${i+1}</td>
+          <td class="px-2 py-2"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)}</div></td>
+          <td class="px-2 py-2 text-right num">${fmt(r.total_lots)}</td>
+          <td class="px-2 py-2 text-right num text-slate-400">${r.price?fmt(r.price,2):'-'}</td>
+          <td class="px-2 py-2 text-right num text-amber-400 font-semibold">${fmtM(r.market_value)}</td>
+          <td class="px-2 py-2 text-right num text-xs text-slate-400">${((r.market_value/total)*100).toFixed(2)}%</td>
+          <td class="px-2 py-2 text-center"><span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-xs">${r.etf_count}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderETF() {
+  const etfKeys = Object.keys(DATA.today);
+  if (!selectedEtf || !DATA.today[selectedEtf]) selectedEtf = etfKeys[0];
+  const today = DATA.today[selectedEtf];
+  const prev = DATA.prev?.[selectedEtf];
+  const prevMap = {};
+  (prev?.holdings||[]).forEach(h => { prevMap[h.code] = h.lots; });
+  const rows = (today?.holdings||[]).map(h => ({
+    ...h, prev_lots: prevMap[h.code]||0, diff: h.lots-(prevMap[h.code]||0),
+    price: DATA.prices?.[h.code]||null, mv: DATA.prices?.[h.code] ? h.lots*1000*DATA.prices[h.code] : null,
+  })).sort((a,b) => b.weight-a.weight);
+  const totalMV = rows.reduce((s,r)=>s+(r.mv||0),0);
+  
+  return `<h2 class="text-lg font-semibold mb-3">ETF 明細</h2>
+  <div class="flex gap-2 flex-wrap mb-4">
+    ${etfKeys.map(k => `<button data-etf="${esc(k)}" class="etf-btn px-3 py-1.5 text-sm rounded ${k===selectedEtf?'bg-amber-600 text-white':'bg-slate-800 text-slate-300 hover:bg-slate-700'}">${esc(k)}</button>`).join('')}
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+      <div><div class="font-semibold">${esc(today.name)} (${esc(selectedEtf)})</div>
+      <div class="text-xs text-slate-400">資料日期 ${esc(today.holdings_date||'-')} · ${rows.length} 檔 · 合計市值 ${fmtM(totalMV)}</div></div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-800/50 text-slate-400 text-xs">
+          <tr><th class="px-2 py-2 text-left">#</th><th class="px-2 py-2 text-left">股票</th>
+          <th class="px-2 py-2 text-right">比例</th><th class="px-2 py-2 text-right">前日張</th>
+          <th class="px-2 py-2 text-right">今日張</th><th class="px-2 py-2 text-right">增減</th>
+          <th class="px-2 py-2 text-right">收盤</th><th class="px-2 py-2 text-right">市值</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          ${rows.map((r,i) => `<tr class="hover:bg-slate-800/30">
+            <td class="px-2 py-1.5 text-slate-500">${i+1}</td>
+            <td class="px-2 py-1.5"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)}</div></td>
+            <td class="px-2 py-1.5 text-right num">${r.weight.toFixed(2)}%</td>
+            <td class="px-2 py-1.5 text-right num text-slate-400">${fmt(r.prev_lots)}</td>
+            <td class="px-2 py-1.5 text-right num">${fmt(r.lots)}</td>
+            <td class="px-2 py-1.5 text-right num ${r.diff>0?'text-emerald-400':r.diff<0?'text-rose-400':'text-slate-500'}">${r.diff!==0?(r.diff>0?'+':'')+fmt(r.diff):'—'}</td>
+            <td class="px-2 py-1.5 text-right num text-slate-400">${r.price?fmt(r.price,2):'-'}</td>
+            <td class="px-2 py-1.5 text-right num text-amber-400">${fmtM(r.mv)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function bindEtf() {
+  document.querySelectorAll('.etf-btn').forEach(btn => {
+    btn.addEventListener('click', () => { selectedEtf = btn.dataset.etf; render(); });
+  });
+}
+
+function renderStock(todayAgg, prevAgg) {
+  const all = Object.values(todayAgg);
+  const filtered = stockSearch.trim() ? all.filter(s => s.code.includes(stockSearch) || s.name.includes(stockSearch)) : all.sort((a,b)=>b.total_lots-a.total_lots).slice(0, 30);
+  const detail = selectedStock && todayAgg[selectedStock];
+  const prev = selectedStock && prevAgg[selectedStock];
+  
+  return `<h2 class="text-lg font-semibold mb-3">個股查詢</h2>
+  <input id="stock-search" value="${esc(stockSearch)}" placeholder="輸入股票代號或名稱 (如 2330 或 台積電)" class="w-full md:max-w-md bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm mb-4 focus:outline-none focus:border-amber-500">
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden max-h-[70vh] overflow-y-auto">
+      <div class="px-4 py-2 text-xs text-slate-400 border-b border-slate-800">${stockSearch.trim()?`符合 ${filtered.length} 檔`:'合計持股 TOP 30'}</div>
+      <div class="divide-y divide-slate-800">
+        ${filtered.map(s => `<button data-code="${esc(s.code)}" class="stk-btn w-full px-4 py-2 text-left flex items-center justify-between hover:bg-slate-800/50 ${selectedStock===s.code?'bg-slate-800':''}">
+          <div><div class="text-slate-200 text-sm">${esc(s.name)}</div><div class="text-xs text-slate-500">${esc(s.code)} · ${s.etf_count}檔持有</div></div>
+          <div class="text-right"><div class="text-sm num">${fmt(s.total_lots)}張</div><div class="text-xs text-amber-400 num">${fmtM(s.market_value)}</div></div>
+        </button>`).join('') || '<div class="p-8 text-center text-sm text-slate-500">無符合</div>'}
+      </div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+      ${!detail ? '<div class="text-center text-sm text-slate-500 py-12">選擇左側個股查看詳情</div>' : `
+      <div class="flex items-center justify-between mb-3">
+        <div><div class="font-bold text-lg">${esc(detail.name)}</div><div class="text-xs text-slate-400">${esc(detail.code)} · 收盤 ${detail.price?fmt(detail.price,2):'N/A'}</div></div>
+        <div class="text-right"><div class="text-xs text-slate-500">合計市值</div><div class="text-amber-400 font-bold">${fmtM(detail.market_value)}</div></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">今日合計</div><div class="num font-semibold">${fmt(detail.total_lots)}張</div></div>
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">前日合計</div><div class="num">${fmt(prev?.total_lots||0)}張</div></div>
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">變動</div><div class="num font-semibold ${(detail.total_lots-(prev?.total_lots||0))>0?'text-emerald-400':(detail.total_lots-(prev?.total_lots||0))<0?'text-rose-400':''}">${(detail.total_lots-(prev?.total_lots||0))>0?'+':''}${fmt(detail.total_lots-(prev?.total_lots||0))}</div></div>
+      </div>
+      <div class="text-xs text-slate-400 mb-2">持有此股的 ETF (${detail.etfs.length}檔):</div>
+      <div class="space-y-1">
+        ${detail.etfs.sort((a,b)=>b.lots-a.lots).map(e => {
+          const pv = (DATA.prev?.[e.etf]?.holdings||[]).find(h=>h.code===detail.code);
+          const d = e.lots - (pv?.lots||0);
+          return `<div class="flex items-center justify-between bg-slate-800/50 rounded px-2 py-1.5 text-sm">
+            <div><span class="text-slate-300">${esc(e.etf_name)}</span><span class="text-xs text-slate-500 ml-1">${esc(e.etf)}</span></div>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-slate-400">${e.weight}%</span>
+              <span class="num text-slate-200">${fmt(e.lots)}張</span>
+              <span class="num font-semibold w-16 text-right ${d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500'}">${d!==0?(d>0?'+':'')+fmt(d):'—'}</span>
+            </div></div>`;
+        }).join('')}
+      </div>`}
+    </div>
+  </div>`;
+}
+
+function bindStock(todayAgg, prevAgg) {
+  const inp = document.getElementById('stock-search');
+  if (inp) inp.addEventListener('input', e => { stockSearch = e.target.value; render(); setTimeout(()=>{const i=document.getElementById('stock-search');if(i){i.focus();i.setSelectionRange(stockSearch.length,stockSearch.length);}},0); });
+  document.querySelectorAll('.stk-btn').forEach(btn => {
+    btn.addEventListener('click', () => { selectedStock = btn.dataset.code; render(); });
+  });
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => { currentTab = btn.dataset.tab; render(); });
+});
+
+fetch('./latest.json?t=' + Date.now())
+  .then(r => { if (!r.ok) throw new Error('404'); return r.json(); })
+  .then(d => { DATA = d; render(); })
+  .catch(() => { DATA = null; render(); });
+</script>
+
+</body>
+</html>
