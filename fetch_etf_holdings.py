@@ -1,448 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v4: 價格抓取改為四段式 fallback
-    1. yfinance .TW 批次
-    2. yfinance .TWO 批次 (上櫃)
-    3. TWSE + TPEx 官方 API 一次撈全部 (cache)
-    4. Yahoo HTML 單檔 fallback (.TW -> .TWO)
-"""
-
-import re
-import sys
-import json
-import time
-from datetime import datetime, timedelta
-from pathlib import Path
-
-import requests
-from bs4 import BeautifulSoup
-
-
-ETFS = [
-    "00980A", "00981A", "00982A", "00984A", "00985A",
-    "00987A", "00991A", "00992A", "00993A", "00994A",
-    "00995A", "00996A", "00400A", "00401A",
-]
-
-MONEYDJ_URL = "https://www.moneydj.com/ETF/X/Basic/Basic0007B.xdjhtm?etfid={code}.TW"
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
-}
-
-
-# =============================================================
-# MoneyDJ 持股抓取 (同 v3)
-# =============================================================
-def fetch_etf_holdings(etf_code, session, retries=3):
-    url = MONEYDJ_URL.format(code=etf_code)
-    for attempt in range(retries + 1):
-        try:
-            r = session.get(url, headers=HEADERS, timeout=60)
-            r.raise_for_status()
-            if r.apparent_encoding:
-                r.encoding = r.apparent_encoding
-            break
-        except Exception as e:
-            if attempt < retries:
-                time.sleep(3 + attempt * 2)
-            else:
-                raise RuntimeError(f"HTTP 失敗: {e}")
-
-    soup = BeautifulSoup(r.text, "html.parser")
-    text_all = soup.get_text(" ", strip=True)
-
-    etf_name = etf_code
-    if soup.title:
-        title_text = soup.title.get_text()
-        m = re.match(r"^(.+?)-" + re.escape(etf_code) + r"\.TW", title_text)
-        if m:
-            etf_name = m.group(1).strip()
-    if etf_name == etf_code:
-        m = re.search(r"([\u4e00-\u9fa5A-Za-z0-9]+?)[〈<\(]" + re.escape(etf_code) + r"\.TW[〉>\)]", text_all)
-        if m:
-            etf_name = m.group(1).strip()
-    if etf_name == etf_code:
-        m = re.search(r"([\u4e00-\u9fa5A-Za-z0-9\-]+?)\(" + re.escape(etf_code) + r"\.TW\)\s*-\s*全部持股", text_all)
-        if m:
-            etf_name = m.group(1).strip()
-
-    m = re.search(r"資料日期[::]\s*(\d{4}/\d{1,2}/\d{1,2})", text_all)
-    holdings_date = m.group(1) if m else None
-
-    target_table = None
-    for table in soup.find_all("table"):
-        headers_text = " ".join(th.get_text(strip=True) for th in table.find_all("th"))
-        if "個股名稱" in headers_text and "持有股數" in headers_text:
-            target_table = table
-            break
-
-    if target_table is None:
-        raise ValueError("找不到持股表格")
-
-    holdings = []
-    skipped_rows = []
-
-    for tr in target_table.find_all("tr"):
-        tds = tr.find_all("td")
-        if len(tds) < 3:
-            continue
-
-        first_cell = tds[0]
-        stock_cell_text = first_cell.get_text(strip=True)
-
-        if "個股名稱" in stock_cell_text or not stock_cell_text:
-            continue
-
-        m2 = re.match(r"(.+?)\(([0-9A-Z]+)\.TW\)", stock_cell_text)
-
-        if not m2:
-            link = first_cell.find("a")
-            if link and link.get("href"):
-                href = link["href"]
-                href_match = re.search(r"etfid=([0-9A-Z]+)\.TW", href)
-                if href_match:
-                    stock_code = href_match.group(1)
-                    stock_name = stock_cell_text.rstrip("*").strip() or "未知"
-                    m2 = True
-                    try:
-                        weight = float(tds[1].get_text(strip=True))
-                        shares = int(tds[2].get_text(strip=True).replace(",", "").replace(" ", ""))
-                    except (ValueError, AttributeError):
-                        skipped_rows.append({
-                            "raw_text": stock_cell_text,
-                            "weight_raw": tds[1].get_text(strip=True) if len(tds) > 1 else "",
-                            "shares_raw": tds[2].get_text(strip=True) if len(tds) > 2 else "",
-                            "reason": "權重或股數無法解析"
-                        })
-                        continue
-                    lots = shares // 1000
-                    if lots < 1:
-                        continue
-                    holdings.append({
-                        "code": stock_code,
-                        "name": stock_name,
-                        "lots": lots,
-                        "weight": round(weight, 2),
-                    })
-                    continue
-
-        if not m2:
-            try:
-                weight_raw = tds[1].get_text(strip=True)
-                shares_raw = tds[2].get_text(strip=True)
-            except Exception:
-                weight_raw = ""
-                shares_raw = ""
-            skipped_rows.append({
-                "raw_text": stock_cell_text or "(空白)",
-                "weight_raw": weight_raw,
-                "shares_raw": shares_raw,
-                "reason": "無代號格式"
-            })
-            continue
-
-        if m2 is not True:
-            stock_name = m2.group(1).strip().rstrip("*").strip()
-            stock_code = m2.group(2)
-            try:
-                weight = float(tds[1].get_text(strip=True))
-                shares = int(tds[2].get_text(strip=True).replace(",", "").replace(" ", ""))
-            except (ValueError, AttributeError):
-                skipped_rows.append({
-                    "raw_text": stock_cell_text,
-                    "weight_raw": tds[1].get_text(strip=True),
-                    "shares_raw": tds[2].get_text(strip=True),
-                    "reason": "權重或股數無法解析"
-                })
-                continue
-            lots = shares // 1000
-            if lots < 1:
-                continue
-            holdings.append({
-                "code": stock_code,
-                "name": stock_name,
-                "lots": lots,
-                "weight": round(weight, 2),
-            })
-
-    return {
-        "name": etf_name,
-        "holdings_date": holdings_date,
-        "holdings": holdings,
-        "skipped_rows": skipped_rows,
-    }
-
-
-# =============================================================
-# 第 1+2 道: yfinance (.TW -> .TWO)
-# =============================================================
-def fetch_prices_bulk_yfinance(codes):
-    prices = {}
-    try:
-        import yfinance as yf
-    except ImportError:
-        print("  [yfinance] 未安裝, 跳過")
-        return prices
-
-    def _batch(suffix, code_list):
-        got = {}
-        if not code_list:
-            return got
-        tickers = [f"{c}{suffix}" for c in code_list]
-        try:
-            df = yf.download(
-                " ".join(tickers),
-                period="5d", interval="1d",
-                progress=False, threads=True, auto_adjust=False,
-            )
-        except Exception as e:
-            print(f"  [yfinance{suffix}] 批次下載失敗: {e}")
-            return got
-
-        if df is None or df.empty:
-            return got
-
-        try:
-            if len(code_list) == 1:
-                if "Close" in df.columns:
-                    v = df["Close"].dropna()
-                    if not v.empty:
-                        got[code_list[0]] = round(float(v.iloc[-1]), 2)
-            else:
-                close = df["Close"]
-                for code in code_list:
-                    t = f"{code}{suffix}"
-                    if t in close.columns:
-                        v = close[t].dropna()
-                        if not v.empty:
-                            got[code] = round(float(v.iloc[-1]), 2)
-        except Exception as e:
-            print(f"  [yfinance{suffix}] 解析失敗: {e}")
-        return got
-
-    print(f"  [yfinance.TW ] 嘗試 {len(codes)} 檔...", end="", flush=True)
-    tw_got = _batch(".TW", codes)
-    prices.update(tw_got)
-    print(f" 取得 {len(tw_got)} 檔")
-
-    missing = [c for c in codes if c not in prices]
-    if missing:
-        print(f"  [yfinance.TWO] 嘗試 {len(missing)} 檔 (上櫃)...", end="", flush=True)
-        two_got = _batch(".TWO", missing)
-        prices.update(two_got)
-        print(f" 取得 {len(two_got)} 檔")
-
-    return prices
-
-
-# =============================================================
-# 第 3 道: TWSE + TPEx 官方 API (一次撈全部, cache)
-# =============================================================
-_TPEX_CACHE = None
-def fetch_all_tpex_prices(session, headers):
-    global _TPEX_CACHE
-    if _TPEX_CACHE is not None:
-        return _TPEX_CACHE
-
-    url = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
-    try:
-        r = session.get(url, headers=headers, timeout=20)
-        if r.status_code != 200:
-            print(f"  [TPEx openapi] HTTP {r.status_code}")
-            _TPEX_CACHE = {}
-            return _TPEX_CACHE
-        arr = r.json()
-        result = {}
-        for row in arr:
-            code = row.get("SecuritiesCompanyCode", "").strip()
-            close = row.get("Close", "").strip()
-            if code and close:
-                try:
-                    result[code] = round(float(close.replace(",", "")), 2)
-                except ValueError:
-                    continue
-        _TPEX_CACHE = result
-        print(f"  [TPEx openapi] 建 cache: {len(result)} 檔上櫃股")
-        return result
-    except Exception as e:
-        print(f"  [TPEx openapi] 失敗: {e}")
-        _TPEX_CACHE = {}
-        return _TPEX_CACHE
-
-
-_TWSE_CACHE = None
-def fetch_all_twse_prices(session, headers):
-    global _TWSE_CACHE
-    if _TWSE_CACHE is not None:
-        return _TWSE_CACHE
-
-    for back in range(7):
-        d = datetime.now() - timedelta(days=back)
-        date_str = d.strftime("%Y%m%d")
-        url = f"https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date={date_str}&type=ALLBUT0999"
-        try:
-            r = session.get(url, headers=headers, timeout=20)
-            if r.status_code != 200:
-                continue
-            data = r.json()
-            if data.get("stat") != "OK":
-                continue
-
-            tables = data.get("tables", [])
-            if not tables:
-                rows = data.get("data9") or data.get("data8") or []
-                fields = data.get("fields9") or data.get("fields8") or []
-            else:
-                target = None
-                for t in tables:
-                    if "收盤價" in t.get("fields", []) and "證券代號" in t.get("fields", []):
-                        target = t
-                        break
-                if not target:
-                    continue
-                rows = target.get("data", [])
-                fields = target.get("fields", [])
-
-            if not rows or not fields:
-                continue
-
-            try:
-                idx_code = fields.index("證券代號")
-                idx_close = fields.index("收盤價")
-            except ValueError:
-                continue
-
-            result = {}
-            for row in rows:
-                try:
-                    code = row[idx_code].strip()
-                    close = row[idx_close].replace(",", "").strip()
-                    if close in ("--", "", "---"):
-                        continue
-                    result[code] = round(float(close), 2)
-                except (ValueError, IndexError, AttributeError):
-                    continue
-
-            if result:
-                _TWSE_CACHE = result
-                print(f"  [TWSE MI_INDEX] {date_str} 建 cache: {len(result)} 檔上市股")
-                return result
-        except Exception:
-            continue
-
-    print(f"  [TWSE MI_INDEX] 7 天內皆失敗")
-    _TWSE_CACHE = {}
-    return _TWSE_CACHE
-
-
-# =============================================================
-# 第 4 道: Yahoo HTML 單檔 (.TW -> .TWO)
-# =============================================================
-def fetch_price_yahoo_html(code, session, headers):
-    for suffix in (".TW", ".TWO"):
-        url = f"https://tw.stock.yahoo.com/quote/{code}{suffix}"
-        try:
-            r = session.get(url, headers=headers, timeout=15)
-            if r.status_code != 200:
-                continue
-
-            m = re.search(r'"regularMarketPrice"\s*:\s*\{[^}]*?"raw"\s*:\s*([\d.]+)', r.text)
-            if m:
-                return round(float(m.group(1)), 2), suffix
-
-            soup = BeautifulSoup(r.text, "html.parser")
-            span = soup.find("span", class_=re.compile(r"Fz\(32px\)"))
-            if span:
-                txt = span.get_text(strip=True).replace(",", "")
-                try:
-                    return round(float(txt), 2), suffix
-                except ValueError:
-                    pass
-        except Exception:
-            continue
-    return None, None
-
-
-# =============================================================
-# 主 orchestrator
-# =============================================================
-def fetch_all_prices(all_stock_codes, session, headers):
-    codes = sorted(all_stock_codes)
-    print(f"\n[價格抓取] 目標 {len(codes)} 檔")
-
-    prices = fetch_prices_bulk_yfinance(codes)
-    missing = [c for c in codes if c not in prices]
-    print(f"  小計: {len(prices)}/{len(codes)}  缺 {len(missing)} 檔")
-
-    if not missing:
-        return prices
-
-    print(f"\n  [官方 API 批次] 建 cache...")
-    twse_map = fetch_all_twse_prices(session, headers)
-    tpex_map = fetch_all_tpex_prices(session, headers)
-
-    hit_twse, hit_tpex = 0, 0
-    for c in list(missing):
-        if c in twse_map:
-            prices[c] = twse_map[c]
-            hit_twse += 1
-        elif c in tpex_map:
-            prices[c] = tpex_map[c]
-            hit_tpex += 1
-    print(f"  TWSE API 補: {hit_twse} 檔, TPEx API 補: {hit_tpex} 檔")
-
-    missing = [c for c in codes if c not in prices]
-    print(f"  小計: {len(prices)}/{len(codes)}  缺 {len(missing)} 檔")
-
-    if not missing:
-        return prices
-
-    print(f"\n  [Yahoo HTML] 單檔 fallback ({len(missing)} 檔)")
-    for c in missing:
-        p, suffix = fetch_price_yahoo_html(c, session, headers)
-        if p:
-            prices[c] = p
-            print(f"    {c}{suffix} -> {p}")
-        time.sleep(0.3)
-
-    final_missing = [c for c in codes if c not in prices]
-    print(f"\n  === 最終: {len(prices)}/{len(codes)} ===")
-    if final_missing:
-        print(f"  ❌ 仍缺: {', '.join(final_missing)}")
-
-    return prices
-
-
-# =============================================================
-# 前一日快照
-# =============================================================
-def find_prev_snapshot(out_dir, today_date):
-    candidates = []
-    for f in out_dir.glob("snapshot-*.json"):
-        m = re.match(r"snapshot-(\d{4}-\d{2}-\d{2})\.json$", f.name)
-        if m and m.group(1) < today_date:
-            candidates.append((m.group(1), f))
-    if not candidates:
-        return None, None
-    candidates.sort(reverse=True)
-    date_str, path = candidates[0]
-    try:
-        return date_str, json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None, None
-
-
-# =============================================================
-# main
-# =============================================================
 def main():
     out_dir = Path("snapshots")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -456,6 +11,9 @@ def main():
     else:
         print("前一日快照: 無 (首次執行)")
 
+    # ========================================================
+    # [1/3] 抓取 MoneyDJ 持股
+    # ========================================================
     print(f"\n[1/3] 抓取 MoneyDJ 持股 ({len(ETFS)} 檔)")
     session = requests.Session()
     all_etf_data = {}
@@ -489,11 +47,48 @@ def main():
         if i < len(ETFS):
             time.sleep(2)
 
+    # ========================================================
+    # 未開盤日檢查: 今天的 holdings_date 跟前一次快照相同 -> 直接結束
+    # ========================================================
+    today_holdings_dates = [d["holdings_date"] for d in all_etf_data.values() if d.get("holdings_date")]
+    # 取眾數 (理論上所有 ETF 的 holdings_date 應該一致)
+    if today_holdings_dates:
+        most_common_today_hd = max(set(today_holdings_dates), key=today_holdings_dates.count)
+    else:
+        most_common_today_hd = None
+
+    prev_holdings_dates = []
+    if prev_snapshot:
+        for etf_data in (prev_snapshot.get("today") or {}).values():
+            hd = etf_data.get("holdings_date")
+            if hd:
+                prev_holdings_dates.append(hd)
+    most_common_prev_hd = max(set(prev_holdings_dates), key=prev_holdings_dates.count) if prev_holdings_dates else None
+
+    print(f"\n  本次 holdings_date: {most_common_today_hd}")
+    print(f"  上次 holdings_date: {most_common_prev_hd}")
+
+    if most_common_today_hd and most_common_prev_hd and most_common_today_hd == most_common_prev_hd:
+        print(f"\n{'='*60}")
+        print(f"🛑 台股未開盤日偵測")
+        print(f"{'='*60}")
+        print(f"  本次與上次的 holdings_date 相同 ({most_common_today_hd})")
+        print(f"  -> 不寫新快照, latest.json 保持不變")
+        print(f"  -> 下次開市會直接跟 {most_common_prev_hd} 比對")
+        print(f"{'='*60}\n")
+        return  # 直接結束 main(), 什麼都不動
+
+    # ========================================================
+    # [2/3] 抓取收盤價 (只在有新交易日資料時才抓)
+    # ========================================================
     print(f"\n[2/3] 抓取收盤價")
     prices = {}
     if all_stock_codes:
         prices = fetch_all_prices(all_stock_codes, session, HEADERS)
 
+    # ========================================================
+    # [3/3] 組合快照並儲存
+    # ========================================================
     print(f"\n[3/3] 組合快照並儲存")
     snapshot = {
         "today_date": today_date,
@@ -537,13 +132,3 @@ def main():
         print(f"\n建議: 到 MoneyDJ 網頁核對這些 ETF 後,手動補資料或通知我修正爬蟲\n")
     else:
         print(f"\n✅ 資料完整性:  無異常列\n")
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"\n[!] 執行失敗: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
