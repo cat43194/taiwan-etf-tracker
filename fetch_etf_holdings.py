@@ -308,21 +308,8 @@ def main():
             time.sleep(2)
 
     prices = {}
-    if all_stock_codes:
-        print(f"\n[2/3] 抓取 Yahoo 收盤價 ({len(all_stock_codes)} 檔)")
-        codes = sorted(all_stock_codes)
-        prices = fetch_prices_bulk_yfinance(codes)
-        print(f"  yfinance 取得: {len(prices)}/{len(codes)}")
-
-        missing = [c for c in codes if c not in prices]
-        if missing:
-            print(f"  Yahoo HTML 補抓: {len(missing)} 檔")
-            for c in missing:
-                p = fetch_price_yahoo_html(c, session)
-                if p:
-                    prices[c] = p
-                time.sleep(0.3)
-            print(f"  最終取得: {len(prices)}/{len(codes)}")
+if all_stock_codes:
+    prices = fetch_all_prices(all_stock_codes, session, HEADERS)
 
     print(f"\n[3/3] 組合快照並儲存")
     snapshot = {
