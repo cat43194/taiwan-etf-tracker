@@ -11,6 +11,8 @@
   .num { font-variant-numeric: tabular-nums; }
   .stock-link { cursor: pointer; transition: color 0.15s; }
   .stock-link:hover { color: #fbbf24; }
+  .sort-th { cursor: pointer; user-select: none; transition: color 0.15s; }
+  .sort-th:hover { color: #fbbf24; }
 </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
@@ -82,49 +84,28 @@
 
 <script>
 // ============================================================
-// 🔐 密碼設定區  (未來要改密碼就改這裡)
-// ============================================================
-// 支援多組密碼,任何一組都能登入。
-// 建議:自己用一組、客戶用另一組,方便追蹤哪組密碼外流
-// 密碼以 Base64 編碼儲存 (簡單混淆,不是真加密)
-//
-// 想改密碼:
-//   1. 打開 https://www.base64encode.org/
-//   2. 輸入你要的新密碼 → 按 Encode
-//   3. 把產生的字串貼到下面陣列對應位置
+// 🔐 密碼設定區
 // ============================================================
 const VALID_PASSWORDS = [
-  "RVRGLTQzMTk0",     // 自己
-  "RVRGLTIwMjZBY3RpdmU=", // 其他人
+  "RVRGLTQzMTk0",
+  "RVRGLTIwMjZBY3RpdmU=",
 ];
-
-// 登入狀態儲存的 key
 const AUTH_KEY = 'etf_tracker_auth_v1';
 
 function checkAuth() {
   const saved = localStorage.getItem(AUTH_KEY);
-  if (saved && VALID_PASSWORDS.includes(saved)) {
-    showMainSite();
-    return true;
-  }
+  if (saved && VALID_PASSWORDS.includes(saved)) { showMainSite(); return true; }
   return false;
 }
-
 function showMainSite() {
   document.getElementById('login-page').classList.add('hidden');
   document.getElementById('main-site').classList.remove('hidden');
   loadData();
 }
-
-function logout() {
-  localStorage.removeItem(AUTH_KEY);
-  location.reload();
-}
+function logout() { localStorage.removeItem(AUTH_KEY); location.reload(); }
 
 document.getElementById('pwd-submit').addEventListener('click', tryLogin);
-document.getElementById('pwd-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') tryLogin();
-});
+document.getElementById('pwd-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
 
 function tryLogin() {
   const input = document.getElementById('pwd-input').value;
@@ -138,23 +119,18 @@ function tryLogin() {
     document.getElementById('pwd-input').focus();
   }
 }
-
-// 自動 focus 密碼框
-setTimeout(() => {
-  const inp = document.getElementById('pwd-input');
-  if (inp) inp.focus();
-}, 100);
-
-// 頁面載入時先檢查有沒有登入過
-if (!checkAuth()) {
-  // 顯示登入頁 (預設就是顯示,不用做事)
-}
+setTimeout(() => { const inp = document.getElementById('pwd-input'); if (inp) inp.focus(); }, 100);
+if (!checkAuth()) { /* 顯示登入頁 */ }
 
 // ============================================================
-// 以下是原本的網站邏輯,只在登入後才執行
+// 主邏輯
 // ============================================================
 const TOP_N = 20;
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
+
+// 排序狀態: {key: 欄位名, dir: 'desc'|'asc'|null}  null = 預設排序
+let mvSort = { key: null, dir: null };
+let etfSort = { key: null, dir: null };
 
 const fmt = (n, d=0) => (n==null||isNaN(n)) ? '-' : Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtM = (n) => {
@@ -165,6 +141,35 @@ const fmtM = (n) => {
 };
 const esc = s => String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
+// ========== 排序工具 ==========
+function cycleSort(current, key) {
+  if (current.key !== key) return { key, dir: 'desc' };
+  if (current.dir === 'desc') return { key, dir: 'asc' };
+  if (current.dir === 'asc') return { key: null, dir: null };
+  return { key, dir: 'desc' };
+}
+function sortRows(rows, sortState, keyMap) {
+  if (!sortState.key || !sortState.dir) return rows;
+  const getter = keyMap[sortState.key];
+  if (!getter) return rows;
+  const sign = sortState.dir === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const va = getter(a), vb = getter(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === 'string') return sign * va.localeCompare(vb, 'zh-Hant');
+    return sign * (va - vb);
+  });
+}
+function sortIcon(sortState, key) {
+  if (sortState.key !== key) return '<span class="text-slate-600 ml-1">⇅</span>';
+  return sortState.dir === 'desc' ? '<span class="text-amber-400 ml-1">▼</span>' : '<span class="text-amber-400 ml-1">▲</span>';
+}
+function toggleMvSort(key) { mvSort = cycleSort(mvSort, key); render(); }
+function toggleEtfSort(key) { etfSort = cycleSort(etfSort, key); render(); }
+
+// ========== 資料彙總 ==========
 function aggregate(snapshot, prices) {
   const map = {};
   Object.entries(snapshot||{}).forEach(([etfCode, etf]) => {
@@ -201,6 +206,7 @@ function computeFlows(today, prev, prices) {
   return flows;
 }
 
+// ========== Modal ==========
 function openStockModal(code) { modalStock = code; renderModal(); }
 function closeStockModal() {
   modalStock = null;
@@ -282,6 +288,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalStock) closeStockModal();
 });
 
+// ========== render ==========
 function render() {
   const main = document.getElementById('main');
   if (!DATA) {
@@ -398,20 +405,37 @@ function renderFlowTable(rows, dir) {
   </div>`;
 }
 
+// ========== 市值 TOP 20 (可排序) ==========
 function renderMV(rows, total) {
+  const keyMap = {
+    name: (r) => r.name,
+    total_lots: (r) => r.total_lots,
+    price: (r) => r.price,
+    market_value: (r) => r.market_value,
+    pct: (r) => r.market_value / total,
+    etf_count: (r) => r.etf_count,
+  };
+  const sorted = sortRows(rows, mvSort, keyMap);
+  const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleMvSort('${key}')">${esc(label)}${sortIcon(mvSort, key)}</th>`;
+
   return `<h2 class="text-lg font-semibold mb-3">合計市值 TOP ${TOP_N}</h2>
   <div class="text-sm text-slate-400 mb-3">所有 ETF 合計市值:<span class="text-amber-400 font-semibold ml-2">${fmtM(total)}</span>
-  <span class="ml-4 text-xs text-slate-500">💡 點擊最右邊 ETF 徽章查看「哪幾檔 ETF 持有 + 張數排行」</span></div>
+  <span class="ml-4 text-xs text-slate-500">💡 點擊欄位標題排序(降序→升序→預設) · 點擊最右邊 ETF 徽章查看持有 ETF</span></div>
   <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-slate-800/50 text-slate-400 text-xs">
-        <tr><th class="px-2 py-2 text-left">#</th><th class="px-2 py-2 text-left">股票</th>
-        <th class="px-2 py-2 text-right">總張數</th><th class="px-2 py-2 text-right">收盤價</th>
-        <th class="px-2 py-2 text-right">合計市值</th><th class="px-2 py-2 text-right">佔比</th>
-        <th class="px-2 py-2 text-center">ETF</th></tr>
+        <tr>
+          <th class="px-2 py-2 text-left">#</th>
+          ${th('股票', 'name', 'left')}
+          ${th('總張數', 'total_lots')}
+          ${th('收盤價', 'price')}
+          ${th('合計市值', 'market_value')}
+          ${th('佔比', 'pct')}
+          ${th('ETF', 'etf_count', 'center')}
+        </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
-        ${rows.map((r,i) => `<tr class="hover:bg-slate-800/30">
+        ${sorted.map((r,i) => `<tr class="hover:bg-slate-800/30">
           <td class="px-2 py-2 text-slate-500">${i+1}</td>
           <td class="px-2 py-2 stock-link" onclick="openStockModal('${esc(r.code)}')"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)}</div></td>
           <td class="px-2 py-2 text-right num">${fmt(r.total_lots)}</td>
@@ -425,6 +449,7 @@ function renderMV(rows, total) {
   </div>`;
 }
 
+// ========== ETF 明細 (可排序) ==========
 function renderETF() {
   const etfKeys = Object.keys(DATA.today);
   if (!selectedEtf || !DATA.today[selectedEtf]) selectedEtf = etfKeys[0];
@@ -432,11 +457,26 @@ function renderETF() {
   const prev = DATA.prev?.[selectedEtf];
   const prevMap = {};
   (prev?.holdings||[]).forEach(h => { prevMap[h.code] = h.lots; });
-  const rows = (today?.holdings||[]).map(h => ({
+  const rawRows = (today?.holdings||[]).map(h => ({
     ...h, prev_lots: prevMap[h.code]||0, diff: h.lots-(prevMap[h.code]||0),
     price: DATA.prices?.[h.code]||null, mv: DATA.prices?.[h.code] ? h.lots*1000*DATA.prices[h.code] : null,
-  })).sort((a,b) => b.weight-a.weight);
-  const totalMV = rows.reduce((s,r)=>s+(r.mv||0),0);
+  }));
+  const totalMV = rawRows.reduce((s,r)=>s+(r.mv||0),0);
+
+  const keyMap = {
+    name: (r) => r.name,
+    weight: (r) => r.weight,
+    prev_lots: (r) => r.prev_lots,
+    lots: (r) => r.lots,
+    diff: (r) => r.diff,
+    price: (r) => r.price,
+    mv: (r) => r.mv,
+  };
+  // 預設依比重降序
+  const defaultSorted = [...rawRows].sort((a,b) => b.weight-a.weight);
+  const rows = (etfSort.key && etfSort.dir) ? sortRows(rawRows, etfSort, keyMap) : defaultSorted;
+
+  const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleEtfSort('${key}')">${esc(label)}${sortIcon(etfSort, key)}</th>`;
 
   return `<h2 class="text-lg font-semibold mb-3">ETF 明細</h2>
   <div class="flex gap-2 flex-wrap mb-4">
@@ -444,16 +484,25 @@ function renderETF() {
   </div>
   <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
     <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
-      <div><div class="font-semibold">${esc(today.name)} (${esc(selectedEtf)})</div>
-      <div class="text-xs text-slate-400">資料日期 ${esc(today.holdings_date||'-')} · ${rows.length} 檔 · 合計市值 ${fmtM(totalMV)}</div></div>
+      <div>
+        <div class="font-semibold">${esc(today.name)} (${esc(selectedEtf)})</div>
+        <div class="text-xs text-slate-400">資料日期 ${esc(today.holdings_date||'-')} · ${rows.length} 檔 · 合計市值 ${fmtM(totalMV)}</div>
+      </div>
+      <div class="text-xs text-slate-500">💡 點擊欄位標題排序(降序→升序→預設)</div>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-slate-800/50 text-slate-400 text-xs">
-          <tr><th class="px-2 py-2 text-left">#</th><th class="px-2 py-2 text-left">股票</th>
-          <th class="px-2 py-2 text-right">比例</th><th class="px-2 py-2 text-right">前日張</th>
-          <th class="px-2 py-2 text-right">今日張</th><th class="px-2 py-2 text-right">增減</th>
-          <th class="px-2 py-2 text-right">收盤</th><th class="px-2 py-2 text-right">市值</th></tr>
+          <tr>
+            <th class="px-2 py-2 text-left">#</th>
+            ${th('股票', 'name', 'left')}
+            ${th('比例', 'weight')}
+            ${th('前日張', 'prev_lots')}
+            ${th('今日張', 'lots')}
+            ${th('增減', 'diff')}
+            ${th('收盤', 'price')}
+            ${th('市值', 'mv')}
+          </tr>
         </thead>
         <tbody class="divide-y divide-slate-800">
           ${rows.map((r,i) => `<tr class="hover:bg-slate-800/30">
