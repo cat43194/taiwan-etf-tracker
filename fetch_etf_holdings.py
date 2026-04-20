@@ -11,7 +11,6 @@ import json
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-
 import requests
 from bs4 import BeautifulSoup
 
@@ -70,10 +69,22 @@ def fetch_etf_holdings(etf_code, session, retries=3):
         if m:
             etf_name = m.group(1).strip()
 
-    # ===== v5 修正: 放寬 holdings_date regex =====
-    # 接受: "資料日期:2026/04/20" / "資料日期: 2026/04/20" / "資料日期 2026/04/20" / "資料日期 : 2026/04/20" 等
+  # ===== v6 debug: 找不到日期時印出 HTML 片段供分析 =====
     m = re.search(r"資料日期[\s::]*?(\d{4}/\d{1,2}/\d{1,2})", text_all)
+    if not m:
+        # 試另一種 regex: 任何「日期」字眼旁邊的 YYYY/MM/DD
+        m = re.search(r"(\d{4}/\d{1,2}/\d{1,2})", text_all)
     holdings_date = m.group(1) if m else None
+
+    # Debug: 只對第一檔 ETF 印出 HTML 片段
+    if etf_code == "00980A" and not holdings_date:
+        print(f"\n  [DEBUG {etf_code}] text_all 長度: {len(text_all)}")
+        # 找任何包含「日期」二字的片段
+        for match in re.finditer(r".{0,30}日期.{0,50}", text_all):
+            print(f"  [DEBUG 日期片段] {match.group(0)}")
+        # 找任何像 YYYY/MM/DD 的片段
+        for match in re.finditer(r".{0,30}\d{4}/\d{1,2}/\d{1,2}.{0,30}", text_all[:3000]):
+            print(f"  [DEBUG 日期樣式] {match.group(0)}")
 
     target_table = None
     for table in soup.find_all("table"):
