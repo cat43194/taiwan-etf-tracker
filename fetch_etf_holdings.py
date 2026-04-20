@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v4: 價格抓取四段式 fallback + 未開盤日偵測
+v5: 放寬 holdings_date regex (接受冒號前後有空白或全形冒號)
 """
 
 import re
@@ -70,7 +70,9 @@ def fetch_etf_holdings(etf_code, session, retries=3):
         if m:
             etf_name = m.group(1).strip()
 
-    m = re.search(r"資料日期[::]\s*(\d{4}/\d{1,2}/\d{1,2})", text_all)
+    # ===== v5 修正: 放寬 holdings_date regex =====
+    # 接受: "資料日期:2026/04/20" / "資料日期: 2026/04/20" / "資料日期 2026/04/20" / "資料日期 : 2026/04/20" 等
+    m = re.search(r"資料日期[\s::]*?(\d{4}/\d{1,2}/\d{1,2})", text_all)
     holdings_date = m.group(1) if m else None
 
     target_table = None
