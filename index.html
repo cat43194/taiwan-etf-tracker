@@ -23,7 +23,7 @@
     <div class="text-center mb-8">
       <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-amber-500 to-rose-600 rounded-2xl flex items-center justify-center text-4xl shadow-2xl">📊</div>
       <h1 class="text-2xl font-bold mb-2">台股主動式ETF 追蹤</h1>
-      <p class="text-sm text-slate-400">每日 19:00 自動更新 · 僅供授權對象使用</p>
+      <p class="text-sm text-slate-400">每日 19:00-20:00 左右自動更新 · 僅供授權對象使用</p>
     </div>
     <div class="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-2xl">
       <label class="block text-sm text-slate-400 mb-2">請輸入存取密碼</label>
@@ -66,6 +66,8 @@
     <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
   </div>
+  <!-- 新 ETF 首日提示橫幅 -->
+  <div id="new-etf-banner" class="hidden max-w-7xl mx-auto px-4 py-2 bg-amber-950/40 border-t border-amber-600/30 text-xs text-amber-300"></div>
 </header>
 
 <main id="main" class="max-w-7xl mx-auto px-4 py-5">
@@ -127,6 +129,7 @@ if (!checkAuth()) { /* 顯示登入頁 */ }
 // ============================================================
 const TOP_N = 20;
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
+let NEW_ETFS = [];  // 新增: 今天首次出現的 ETF 代號清單 (首日不算買賣超)
 
 // 排序狀態
 let mvSort = { key: null, dir: null };
@@ -189,20 +192,52 @@ function aggregate(snapshot, prices) {
   return map;
 }
 
-function computeFlows(today, prev, prices) {
-  const keys = new Set([...Object.keys(today), ...Object.keys(prev)]);
+// ========== 偵測新增 ETF (今天有、昨天沒有) ==========
+function detectNewEtfs(todaySnap, prevSnap) {
+  const todayKeys = new Set(Object.keys(todaySnap || {}));
+  const prevKeys = new Set(Object.keys(prevSnap || {}));
+  // 如果 prev 是空(首次執行),就不當作「新增」,全部視為 baseline
+  if (prevKeys.size === 0) return [];
+  const added = [];
+  todayKeys.forEach(k => {
+    if (!prevKeys.has(k)) added.push(k);
+  });
+  return added;
+}
+
+// ========== 算買賣超,排除新 ETF 首日的貢獻 ==========
+function computeFlows(todaySnap, prevSnap, prices, newEtfs) {
+  // 步驟 1: 算出「扣除新 ETF 後」的 today 彙總 (用來算 diff)
+  const filteredTodaySnap = {};
+  Object.entries(todaySnap || {}).forEach(([etfCode, etf]) => {
+    if (!newEtfs.includes(etfCode)) {
+      filteredTodaySnap[etfCode] = etf;
+    }
+  });
+  const filteredTodayAgg = aggregate(filteredTodaySnap, prices);
+  const prevAgg = aggregate(prevSnap, prices);
+
+  // 步驟 2: 正常算 diff (只涵蓋舊 ETF 的變動)
+  const keys = new Set([...Object.keys(filteredTodayAgg), ...Object.keys(prevAgg)]);
   const flows = [];
   keys.forEach(code => {
-    const t = today[code], p = prev[code];
-    const today_lots = t?t.total_lots:0, prev_lots = p?p.total_lots:0;
+    const t = filteredTodayAgg[code], p = prevAgg[code];
+    const today_lots = t ? t.total_lots : 0;
+    const prev_lots = p ? p.total_lots : 0;
     const diff = today_lots - prev_lots;
     const price = prices[code] ?? null;
+    // 為了顯示完整的「今日 ETF 持有數」在 modal/個股頁裡,我們另外帶上「包含新 ETF」的總張數
+    const todayAggFull = aggregate(todaySnap, prices);
+    const full_today_lots = todayAggFull[code] ? todayAggFull[code].total_lots : 0;
+    const full_etf_count = todayAggFull[code] ? todayAggFull[code].etf_count : 0;
     flows.push({
-      code, name: (t&&t.name)||(p&&p.name)||code,
+      code, name: (t && t.name) || (p && p.name) || (todayAggFull[code] && todayAggFull[code].name) || code,
       today_lots, prev_lots, diff,
-      diff_pct: prev_lots>0 ? (diff/prev_lots)*100 : (today_lots>0?999:0),
-      price, diff_value: price ? diff*1000*price : null,
-      etf_count: t ? t.etf_count : 0,
+      diff_pct: prev_lots > 0 ? (diff / prev_lots) * 100 : (today_lots > 0 ? 999 : 0),
+      price, diff_value: price ? diff * 1000 * price : null,
+      etf_count: full_etf_count,
+      // 提供給 UI 顯示: 有沒有新 ETF 也持有這檔股票
+      has_new_etf: full_today_lots !== today_lots,
     });
   });
   return flows;
@@ -266,13 +301,19 @@ function renderModal() {
         </thead>
         <tbody class="divide-y divide-slate-800">
           ${etfs.map((e, i) => {
+            const isNew = NEW_ETFS.includes(e.etf);
             const pv = (DATA.prev?.[e.etf]?.holdings || []).find(h => h.code === stock.code);
             const d = e.lots - (pv?.lots || 0);
-            return `<tr class="hover:bg-slate-800/30">
+            return `<tr class="hover:bg-slate-800/30 ${isNew?'bg-amber-950/20':''}">
               <td class="px-3 py-2 text-slate-500">${i+1}</td>
-              <td class="px-3 py-2"><div class="text-slate-200">${esc(e.etf_name)}</div><div class="text-xs text-slate-500">${esc(e.etf)}</div></td>
+              <td class="px-3 py-2">
+                <div class="text-slate-200">${esc(e.etf_name)}${isNew?' <span class="text-xs bg-amber-600/30 text-amber-300 px-1.5 py-0.5 rounded ml-1">新增首日</span>':''}</div>
+                <div class="text-xs text-slate-500">${esc(e.etf)}</div>
+              </td>
               <td class="px-3 py-2 text-right num font-semibold text-slate-100">${fmt(e.lots)}</td>
-              <td class="px-3 py-2 text-right num text-xs ${d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500'}">${d!==0?(d>0?'+':'')+fmt(d):'—'}</td>
+              <td class="px-3 py-2 text-right num text-xs ${isNew?'text-amber-400':(d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500')}">
+                ${isNew?'— 首日':(d!==0?(d>0?'+':'')+fmt(d):'—')}
+              </td>
               <td class="px-3 py-2 text-right num text-xs text-slate-400">${e.weight}%</td>
             </tr>`;
           }).join('')}
@@ -293,21 +334,42 @@ document.addEventListener('keydown', e => {
 // ========== render ==========
 function render() {
   const main = document.getElementById('main');
+  const banner = document.getElementById('new-etf-banner');
   if (!DATA) {
     main.innerHTML = `<div class="max-w-lg mx-auto mt-16 text-center p-6 bg-slate-900 border border-slate-800 rounded-lg">
       <div class="text-rose-400 font-semibold mb-3 text-lg">⚠️ 尚無資料</div>
       <p class="text-sm text-slate-400">GitHub Actions 還沒跑過第一次,<br>或 latest.json 尚未被 commit。</p></div>`;
+    if (banner) banner.classList.add('hidden');
     return;
   }
+
+  // 偵測新 ETF
+  NEW_ETFS = detectNewEtfs(DATA.today, DATA.prev);
+
+  // 彙總(包含新 ETF — 用於市值/個股查詢等「現況」呈現)
   const todayAgg = aggregate(DATA.today, DATA.prices||{});
   const prevAgg = aggregate(DATA.prev||{}, DATA.prices||{});
-  const flows = computeFlows(todayAgg, prevAgg, DATA.prices||{});
+
+  // 買賣超(排除新 ETF 貢獻)
+  const flows = computeFlows(DATA.today, DATA.prev||{}, DATA.prices||{}, NEW_ETFS);
   const buy = flows.filter(f=>f.diff>0).sort((a,b)=>b.diff-a.diff).slice(0, TOP_N);
   const sell = flows.filter(f=>f.diff<0).sort((a,b)=>a.diff-b.diff).slice(0, TOP_N);
   const mv = Object.values(todayAgg).filter(s=>s.market_value!=null).sort((a,b)=>b.market_value-a.market_value).slice(0, TOP_N);
 
   document.getElementById('header-sub').textContent = `${Object.keys(DATA.today).length} 檔 ETF · ${Object.keys(todayAgg).length} 檔個股`;
   document.getElementById('update-info').innerHTML = `📅 ${DATA.today_date} <span class="text-slate-500">vs</span> ${DATA.prev_date||'—'}`;
+
+  // 新 ETF 橫幅
+  if (NEW_ETFS.length > 0 && banner) {
+    const names = NEW_ETFS.map(k => {
+      const n = DATA.today[k]?.name || k;
+      return `<span class="font-semibold">${esc(n)}</span> (${esc(k)})`;
+    }).join('、');
+    banner.innerHTML = `⚠️ 今日新增 ${NEW_ETFS.length} 檔 ETF:${names},首日持股<u>不計入買賣超</u>,明日起正常比對`;
+    banner.classList.remove('hidden');
+  } else if (banner) {
+    banner.classList.add('hidden');
+  }
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('tab-active', btn.dataset.tab === currentTab);
@@ -396,7 +458,12 @@ function renderFlowTable(rows, dir) {
 
   const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleFlowSort('${dir}','${key}')">${esc(label)}${sortIcon(sortState, key)}</th>`;
 
+  const newEtfNote = NEW_ETFS.length > 0
+    ? `<div class="text-xs text-amber-400 mb-2">⚠️ 已排除新增 ETF (${NEW_ETFS.join(', ')}) 首日持股</div>`
+    : '';
+
   return `<h2 class="text-lg font-semibold mb-3">${label} TOP ${TOP_N} (單位:張)</h2>
+  ${newEtfNote}
   <div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看「哪幾檔 ETF 持有」· 點擊欄位標題排序(降序→升序→預設)</div>
   <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
     <table class="w-full text-sm">
@@ -413,7 +480,7 @@ function renderFlowTable(rows, dir) {
       <tbody class="divide-y divide-slate-800">
         ${sorted.map((r,i) => `<tr class="hover:bg-slate-800/30">
           <td class="px-2 py-2 text-slate-500">${i+1}</td>
-          <td class="px-2 py-2 stock-link" onclick="openStockModal('${esc(r.code)}')"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)} · ${r.etf_count}檔持有</div></td>
+          <td class="px-2 py-2 stock-link" onclick="openStockModal('${esc(r.code)}')"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)} · ${r.etf_count}檔持有${r.has_new_etf?' <span class="text-amber-400">(含新)</span>':''}</div></td>
           <td class="px-2 py-2 text-right num text-slate-400">${fmt(r.prev_lots)}</td>
           <td class="px-2 py-2 text-right num">${fmt(r.today_lots)}</td>
           <td class="px-2 py-2 text-right num font-semibold text-${color}-400">${r.diff>0?'+':''}${fmt(r.diff)}</td>
@@ -476,9 +543,13 @@ function renderETF() {
   const prev = DATA.prev?.[selectedEtf];
   const prevMap = {};
   (prev?.holdings||[]).forEach(h => { prevMap[h.code] = h.lots; });
+  const isNewEtf = NEW_ETFS.includes(selectedEtf);
   const rawRows = (today?.holdings||[]).map(h => ({
-    ...h, prev_lots: prevMap[h.code]||0, diff: h.lots-(prevMap[h.code]||0),
-    price: DATA.prices?.[h.code]||null, mv: DATA.prices?.[h.code] ? h.lots*1000*DATA.prices[h.code] : null,
+    ...h,
+    prev_lots: prevMap[h.code]||0,
+    diff: isNewEtf ? 0 : h.lots-(prevMap[h.code]||0),
+    price: DATA.prices?.[h.code]||null,
+    mv: DATA.prices?.[h.code] ? h.lots*1000*DATA.prices[h.code] : null,
   }));
   const totalMV = rawRows.reduce((s,r)=>s+(r.mv||0),0);
 
@@ -496,15 +567,24 @@ function renderETF() {
 
   const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleEtfSort('${key}')">${esc(label)}${sortIcon(etfSort, key)}</th>`;
 
+  const newTag = isNewEtf ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">新增首日</span>' : '';
+  const newNote = isNewEtf ? '<div class="text-xs text-amber-400 mt-1">⚠️ 此 ETF 今日首次納入追蹤,持股變動不計入買賣超</div>' : '';
+
   return `<h2 class="text-lg font-semibold mb-3">ETF 明細</h2>
   <div class="flex gap-2 flex-wrap mb-4">
-    ${etfKeys.map(k => `<button data-etf="${esc(k)}" class="etf-btn px-3 py-1.5 text-sm rounded ${k===selectedEtf?'bg-amber-600 text-white':'bg-slate-800 text-slate-300 hover:bg-slate-700'}">${esc(k)}</button>`).join('')}
+    ${etfKeys.map(k => {
+      const isNew = NEW_ETFS.includes(k);
+      const base = k===selectedEtf ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+      const badge = isNew ? ' <span class="text-[10px] bg-amber-400/30 px-1 rounded">新</span>' : '';
+      return `<button data-etf="${esc(k)}" class="etf-btn px-3 py-1.5 text-sm rounded ${base}">${esc(k)}${badge}</button>`;
+    }).join('')}
   </div>
   <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
     <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
       <div>
-        <div class="font-semibold">${esc(today.name)} (${esc(selectedEtf)})</div>
+        <div class="font-semibold">${esc(today.name)} (${esc(selectedEtf)})${newTag}</div>
         <div class="text-xs text-slate-400">資料日期 ${esc(today.holdings_date||'-')} · ${rows.length} 檔 · 合計市值 ${fmtM(totalMV)}</div>
+        ${newNote}
       </div>
       <div class="text-xs text-slate-500">💡 點擊欄位標題排序(降序→升序→預設)</div>
     </div>
@@ -527,9 +607,9 @@ function renderETF() {
             <td class="px-2 py-1.5 text-slate-500">${i+1}</td>
             <td class="px-2 py-1.5 stock-link" onclick="openStockModal('${esc(r.code)}')"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)}</div></td>
             <td class="px-2 py-1.5 text-right num">${r.weight.toFixed(2)}%</td>
-            <td class="px-2 py-1.5 text-right num text-slate-400">${fmt(r.prev_lots)}</td>
+            <td class="px-2 py-1.5 text-right num text-slate-400">${isNewEtf?'—':fmt(r.prev_lots)}</td>
             <td class="px-2 py-1.5 text-right num">${fmt(r.lots)}</td>
-            <td class="px-2 py-1.5 text-right num ${r.diff>0?'text-emerald-400':r.diff<0?'text-rose-400':'text-slate-500'}">${r.diff!==0?(r.diff>0?'+':'')+fmt(r.diff):'—'}</td>
+            <td class="px-2 py-1.5 text-right num ${isNewEtf?'text-amber-400':(r.diff>0?'text-emerald-400':r.diff<0?'text-rose-400':'text-slate-500')}">${isNewEtf?'首日':(r.diff!==0?(r.diff>0?'+':'')+fmt(r.diff):'—')}</td>
             <td class="px-2 py-1.5 text-right num text-slate-400">${r.price?fmt(r.price,2):'-'}</td>
             <td class="px-2 py-1.5 text-right num text-amber-400">${fmtM(r.mv)}</td>
           </tr>`).join('')}
@@ -576,14 +656,19 @@ function renderStock(todayAgg, prevAgg) {
       <div class="text-xs text-slate-400 mb-2">持有此股的 ETF (${detail.etfs.length}檔):</div>
       <div class="space-y-1">
         ${detail.etfs.sort((a,b)=>b.lots-a.lots).map(e => {
+          const isNew = NEW_ETFS.includes(e.etf);
           const pv = (DATA.prev?.[e.etf]?.holdings||[]).find(h=>h.code===detail.code);
           const d = e.lots - (pv?.lots||0);
-          return `<div class="flex items-center justify-between bg-slate-800/50 rounded px-2 py-1.5 text-sm">
-            <div><span class="text-slate-300">${esc(e.etf_name)}</span><span class="text-xs text-slate-500 ml-1">${esc(e.etf)}</span></div>
+          return `<div class="flex items-center justify-between bg-slate-800/50 rounded px-2 py-1.5 text-sm ${isNew?'border-l-2 border-amber-500':''}">
+            <div>
+              <span class="text-slate-300">${esc(e.etf_name)}</span>
+              <span class="text-xs text-slate-500 ml-1">${esc(e.etf)}</span>
+              ${isNew?'<span class="text-xs bg-amber-600/30 text-amber-300 px-1 rounded ml-1">新</span>':''}
+            </div>
             <div class="flex items-center gap-2 text-xs">
               <span class="text-slate-400">${e.weight}%</span>
               <span class="num text-slate-200">${fmt(e.lots)}張</span>
-              <span class="num font-semibold w-16 text-right ${d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500'}">${d!==0?(d>0?'+':'')+fmt(d):'—'}</span>
+              <span class="num font-semibold w-16 text-right ${isNew?'text-amber-400':(d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500')}">${isNew?'首日':(d!==0?(d>0?'+':'')+fmt(d):'—')}</span>
             </div></div>`;
         }).join('')}
       </div>`}
