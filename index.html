@@ -128,9 +128,10 @@ if (!checkAuth()) { /* 顯示登入頁 */ }
 const TOP_N = 20;
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
 
-// 排序狀態: {key: 欄位名, dir: 'desc'|'asc'|null}  null = 預設排序
+// 排序狀態
 let mvSort = { key: null, dir: null };
 let etfSort = { key: null, dir: null };
+let flowSort = { buy: { key: null, dir: null }, sell: { key: null, dir: null } };
 
 const fmt = (n, d=0) => (n==null||isNaN(n)) ? '-' : Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtM = (n) => {
@@ -168,6 +169,7 @@ function sortIcon(sortState, key) {
 }
 function toggleMvSort(key) { mvSort = cycleSort(mvSort, key); render(); }
 function toggleEtfSort(key) { etfSort = cycleSort(etfSort, key); render(); }
+function toggleFlowSort(dir, key) { flowSort[dir] = cycleSort(flowSort[dir], key); render(); }
 
 // ========== 資料彙總 ==========
 function aggregate(snapshot, prices) {
@@ -377,27 +379,44 @@ function miniMV(rows, total) {
     </div>`).join('') + '</div>';
 }
 
+// ========== 買賣超 TOP 20 (可排序, 移除 %) ==========
 function renderFlowTable(rows, dir) {
   const color = dir === 'buy' ? 'emerald' : 'rose';
   const label = dir === 'buy' ? '買超' : '賣超';
+  const sortState = flowSort[dir];
+
+  const keyMap = {
+    name: (r) => r.name,
+    prev_lots: (r) => r.prev_lots,
+    today_lots: (r) => r.today_lots,
+    diff: (r) => r.diff,
+    diff_value: (r) => r.diff_value,
+  };
+  const sorted = sortRows(rows, sortState, keyMap);
+
+  const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleFlowSort('${dir}','${key}')">${esc(label)}${sortIcon(sortState, key)}</th>`;
+
   return `<h2 class="text-lg font-semibold mb-3">${label} TOP ${TOP_N} (單位:張)</h2>
-  <div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看「哪幾檔 ETF 持有」</div>
+  <div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看「哪幾檔 ETF 持有」· 點擊欄位標題排序(降序→升序→預設)</div>
   <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-slate-800/50 text-slate-400 text-xs">
-        <tr><th class="px-2 py-2 text-left">#</th><th class="px-2 py-2 text-left">股票</th>
-        <th class="px-2 py-2 text-right">昨日張</th><th class="px-2 py-2 text-right">今日張</th>
-        <th class="px-2 py-2 text-right">增減</th><th class="px-2 py-2 text-right">%</th>
-        <th class="px-2 py-2 text-right">變動金額</th></tr>
+        <tr>
+          <th class="px-2 py-2 text-left">#</th>
+          ${th('股票', 'name', 'left')}
+          ${th('昨日張', 'prev_lots')}
+          ${th('今日張', 'today_lots')}
+          ${th('增減', 'diff')}
+          ${th('變動金額', 'diff_value')}
+        </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
-        ${rows.map((r,i) => `<tr class="hover:bg-slate-800/30">
+        ${sorted.map((r,i) => `<tr class="hover:bg-slate-800/30">
           <td class="px-2 py-2 text-slate-500">${i+1}</td>
           <td class="px-2 py-2 stock-link" onclick="openStockModal('${esc(r.code)}')"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)} · ${r.etf_count}檔持有</div></td>
           <td class="px-2 py-2 text-right num text-slate-400">${fmt(r.prev_lots)}</td>
           <td class="px-2 py-2 text-right num">${fmt(r.today_lots)}</td>
           <td class="px-2 py-2 text-right num font-semibold text-${color}-400">${r.diff>0?'+':''}${fmt(r.diff)}</td>
-          <td class="px-2 py-2 text-right num text-xs text-${color}-400">${r.diff_pct>900?'新進':(r.diff>0?'+':'')+r.diff_pct.toFixed(1)+'%'}</td>
           <td class="px-2 py-2 text-right num text-xs text-${color}-400">${r.diff_value!=null?(r.diff>0?'+':'')+fmtM(r.diff_value):'-'}</td>
         </tr>`).join('')}
       </tbody>
@@ -472,7 +491,6 @@ function renderETF() {
     price: (r) => r.price,
     mv: (r) => r.mv,
   };
-  // 預設依比重降序
   const defaultSorted = [...rawRows].sort((a,b) => b.weight-a.weight);
   const rows = (etfSort.key && etfSort.dir) ? sortRows(rawRows, etfSort, keyMap) : defaultSorted;
 
