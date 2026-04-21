@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v5: 放寬 holdings_date regex (接受冒號前後有空白或全形冒號)
+v6: 找不到表格時印 debug log,幫助診斷 00984A 失聯原因
 """
 
 import re
@@ -11,6 +11,7 @@ import json
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -69,22 +70,8 @@ def fetch_etf_holdings(etf_code, session, retries=3):
         if m:
             etf_name = m.group(1).strip()
 
-  # ===== v6 debug: 找不到日期時印出 HTML 片段供分析 =====
     m = re.search(r"資料日期[\s::]*?(\d{4}/\d{1,2}/\d{1,2})", text_all)
-    if not m:
-        # 試另一種 regex: 任何「日期」字眼旁邊的 YYYY/MM/DD
-        m = re.search(r"(\d{4}/\d{1,2}/\d{1,2})", text_all)
     holdings_date = m.group(1) if m else None
-
-    # Debug: 只對第一檔 ETF 印出 HTML 片段
-    if etf_code == "00980A" and not holdings_date:
-        print(f"\n  [DEBUG {etf_code}] text_all 長度: {len(text_all)}")
-        # 找任何包含「日期」二字的片段
-        for match in re.finditer(r".{0,30}日期.{0,50}", text_all):
-            print(f"  [DEBUG 日期片段] {match.group(0)}")
-        # 找任何像 YYYY/MM/DD 的片段
-        for match in re.finditer(r".{0,30}\d{4}/\d{1,2}/\d{1,2}.{0,30}", text_all[:3000]):
-            print(f"  [DEBUG 日期樣式] {match.group(0)}")
 
     target_table = None
     for table in soup.find_all("table"):
@@ -93,14 +80,14 @@ def fetch_etf_holdings(etf_code, session, retries=3):
             target_table = table
             break
 
-   if target_table is None:
-        # Debug: 印出 HTML 片段幫助診斷
-        print(f"      [DEBUG {etf_code}] HTTP 狀態={r.status_code}, 長度={len(r.text)}")
-        print(f"      [DEBUG {etf_code}] 前 500 字元: {r.text[:500]}")
+    if target_table is None:
+        # Debug: 印出失敗診斷資訊
+        print(f"      [DEBUG {etf_code}] HTTP 狀態={r.status_code}, 回應長度={len(r.text)}")
         print(f"      [DEBUG {etf_code}] 含 '持有股數': {'持有股數' in r.text}")
         print(f"      [DEBUG {etf_code}] 含 '個股名稱': {'個股名稱' in r.text}")
-        print(f"      [DEBUG {etf_code}] 含 'Cloudflare': {'Cloudflare' in r.text or 'cloudflare' in r.text}")
+        print(f"      [DEBUG {etf_code}] 含 'Cloudflare': {('Cloudflare' in r.text) or ('cloudflare' in r.text)}")
         print(f"      [DEBUG {etf_code}] 含 'cf-ray': {'cf-ray' in r.text.lower()}")
+        print(f"      [DEBUG {etf_code}] 前 300 字元: {r.text[:300]}")
         raise ValueError("找不到持股表格")
 
     holdings = []
@@ -534,9 +521,9 @@ def main():
         print(f"  -> 下次開市會直接跟 {most_common_prev_hd} 比對")
         print(f"{'='*60}\n")
         return
-# ========================================================
-    # ETF 數量防呆: 今天抓到的 ETF 數量 < 上次快照,代表有 ETF 失聯
-    # 為避免寫出缺檔版本污染 latest.json,直接 abort
+
+    # ========================================================
+    # ETF 數量防呆
     # ========================================================
     today_etf_count = len(all_etf_data)
     prev_etf_count = len((prev_snapshot or {}).get("today") or {})
@@ -555,6 +542,7 @@ def main():
         print(f"  -> 下次重跑若恢復正常會自動寫入")
         print(f"{'='*60}\n")
         return
+
     # ========================================================
     # 抓收盤價
     # ========================================================
