@@ -11,8 +11,17 @@
   .num { font-variant-numeric: tabular-nums; }
   .stock-link { cursor: pointer; transition: color 0.15s; }
   .stock-link:hover { color: #fbbf24; }
-  .sort-th { cursor: pointer; user-select: none; transition: color 0.15s; }
+  .sort-th { cursor: pointer; user-select: none; transition: color 0.15s; white-space: nowrap; }
   .sort-th:hover { color: #fbbf24; }
+  .stock-cell { min-width: 120px; }
+  /* 手機上的細節調整 */
+  @media (max-width: 640px) {
+    .tab-btn { font-size: 0.85rem; padding: 0.5rem 0.6rem; }
+    table { font-size: 0.8rem; }
+    .stock-cell { min-width: 96px; max-width: 110px; }
+    .stock-cell .stk-name { font-size: 0.9rem; line-height: 1.15; }
+    .stock-cell .stk-meta { font-size: 0.7rem; line-height: 1.1; white-space: nowrap; }
+  }
 </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
@@ -23,7 +32,7 @@
     <div class="text-center mb-8">
       <div class="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-amber-500 to-rose-600 rounded-2xl flex items-center justify-center text-4xl shadow-2xl">📊</div>
       <h1 class="text-2xl font-bold mb-2">台股主動式ETF 追蹤</h1>
-      <p class="text-sm text-slate-400">每日 19:00-20:00 左右自動更新 · 僅供授權對象使用</p>
+      <p class="text-sm text-slate-400">每日 21:00-22:00 自動更新 · 僅供授權對象使用</p>
     </div>
     <div class="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-2xl">
       <label class="block text-sm text-slate-400 mb-2">請輸入存取密碼</label>
@@ -45,20 +54,22 @@
 <div id="main-site" class="hidden">
 
 <header class="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-800">
-  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
-    <div class="flex items-center gap-2">
-      <div class="w-9 h-9 bg-gradient-to-br from-amber-500 to-rose-600 rounded-lg flex items-center justify-center">📊</div>
-      <div>
+  <!-- 第一行: Logo + 統計 + 日期 + 登出 -->
+  <div class="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-amber-500 to-rose-600 rounded-lg flex items-center justify-center flex-shrink-0">📊</div>
+      <div class="min-w-0">
         <div class="font-bold text-sm">台股主動式ETF 追蹤</div>
-        <div class="text-xs text-slate-400" id="header-sub">載入中...</div>
+        <div class="text-[10px] sm:text-xs text-slate-400 truncate" id="header-sub">載入中...</div>
       </div>
     </div>
-    <div class="flex items-center gap-2">
-      <div class="text-xs text-slate-300 bg-slate-800 px-3 py-1.5 rounded" id="update-info">—</div>
-      <button onclick="logout()" class="text-xs text-slate-400 hover:text-rose-400 px-2 py-1">登出</button>
+    <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+      <div class="text-[11px] sm:text-xs text-slate-300 bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded" id="update-info">—</div>
+      <button onclick="logout()" class="text-[11px] sm:text-xs text-slate-400 hover:text-rose-400 px-1 sm:px-2 py-1">登出</button>
     </div>
   </div>
-  <div class="max-w-7xl mx-auto px-4 flex gap-1 overflow-x-auto border-t border-slate-800 text-sm">
+  <!-- 分頁按鈕 -->
+  <div class="max-w-7xl mx-auto px-2 sm:px-4 flex gap-0 sm:gap-1 overflow-x-auto border-t border-slate-800 text-sm">
     <button data-tab="overview" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">總覽</button>
     <button data-tab="buy" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">買超 TOP 20</button>
     <button data-tab="sell" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">賣超 TOP 20</button>
@@ -67,19 +78,19 @@
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
   </div>
   <!-- 新 ETF 首日提示橫幅 -->
-  <div id="new-etf-banner" class="hidden max-w-7xl mx-auto px-4 py-2 bg-amber-950/40 border-t border-amber-600/30 text-xs text-amber-300"></div>
+  <div id="new-etf-banner" class="hidden max-w-7xl mx-auto px-3 sm:px-4 py-2 bg-amber-950/40 border-t border-amber-600/30 text-xs text-amber-300"></div>
 </header>
 
-<main id="main" class="max-w-7xl mx-auto px-4 py-5">
+<main id="main" class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-5">
   <div class="text-center text-slate-400 py-20">載入中...</div>
 </main>
 
-<div id="stock-modal" class="hidden fixed inset-0 bg-black/80 z-50 items-center justify-center p-4" style="backdrop-filter: blur(4px);">
+<div id="stock-modal" class="hidden fixed inset-0 bg-black/80 z-50 items-center justify-center p-3 sm:p-4" style="backdrop-filter: blur(4px);">
   <div id="modal-content" class="bg-slate-900 border border-slate-700 rounded-lg max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl"></div>
 </div>
 
 <footer class="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-slate-500 border-t border-slate-800 mt-10">
-  資料:MoneyDJ 持股 + Yahoo 收盤價 · 每日 19:00 自動更新 · 僅供參考不構成投資建議
+  資料:MoneyDJ 持股 + Yahoo 收盤價 · 每日 21:00-22:00 自動更新 · 僅供參考不構成投資建議
 </footer>
 
 </div>
@@ -129,18 +140,18 @@ if (!checkAuth()) { /* 顯示登入頁 */ }
 // ============================================================
 const TOP_N = 20;
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
-let NEW_ETFS = [];  // 新增: 今天首次出現的 ETF 代號清單 (首日不算買賣超)
+let NEW_ETFS = [];
 
-// 排序狀態
 let mvSort = { key: null, dir: null };
 let etfSort = { key: null, dir: null };
 let flowSort = { buy: { key: null, dir: null }, sell: { key: null, dir: null } };
 
 const fmt = (n, d=0) => (n==null||isNaN(n)) ? '-' : Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+// 市值專用:億到小數第 1 位,萬到整數
 const fmtM = (n) => {
   if (n==null||isNaN(n)) return '-';
-  if (Math.abs(n)>=1e8) return (n/1e8).toFixed(2)+'億';
-  if (Math.abs(n)>=1e4) return (n/1e4).toFixed(1)+'萬';
+  if (Math.abs(n)>=1e8) return (n/1e8).toFixed(1)+'億';
+  if (Math.abs(n)>=1e4) return Math.round(n/1e4)+'萬';
   return fmt(n);
 };
 const esc = s => String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -167,8 +178,8 @@ function sortRows(rows, sortState, keyMap) {
   });
 }
 function sortIcon(sortState, key) {
-  if (sortState.key !== key) return '<span class="text-slate-600 ml-1">⇅</span>';
-  return sortState.dir === 'desc' ? '<span class="text-amber-400 ml-1">▼</span>' : '<span class="text-amber-400 ml-1">▲</span>';
+  if (sortState.key !== key) return '<span class="text-slate-600 ml-0.5">⇅</span>';
+  return sortState.dir === 'desc' ? '<span class="text-amber-400 ml-0.5">▼</span>' : '<span class="text-amber-400 ml-0.5">▲</span>';
 }
 function toggleMvSort(key) { mvSort = cycleSort(mvSort, key); render(); }
 function toggleEtfSort(key) { etfSort = cycleSort(etfSort, key); render(); }
@@ -192,11 +203,9 @@ function aggregate(snapshot, prices) {
   return map;
 }
 
-// ========== 偵測新增 ETF (今天有、昨天沒有) ==========
 function detectNewEtfs(todaySnap, prevSnap) {
   const todayKeys = new Set(Object.keys(todaySnap || {}));
   const prevKeys = new Set(Object.keys(prevSnap || {}));
-  // 如果 prev 是空(首次執行),就不當作「新增」,全部視為 baseline
   if (prevKeys.size === 0) return [];
   const added = [];
   todayKeys.forEach(k => {
@@ -205,9 +214,7 @@ function detectNewEtfs(todaySnap, prevSnap) {
   return added;
 }
 
-// ========== 算買賣超,排除新 ETF 首日的貢獻 ==========
 function computeFlows(todaySnap, prevSnap, prices, newEtfs) {
-  // 步驟 1: 算出「扣除新 ETF 後」的 today 彙總 (用來算 diff)
   const filteredTodaySnap = {};
   Object.entries(todaySnap || {}).forEach(([etfCode, etf]) => {
     if (!newEtfs.includes(etfCode)) {
@@ -217,7 +224,6 @@ function computeFlows(todaySnap, prevSnap, prices, newEtfs) {
   const filteredTodayAgg = aggregate(filteredTodaySnap, prices);
   const prevAgg = aggregate(prevSnap, prices);
 
-  // 步驟 2: 正常算 diff (只涵蓋舊 ETF 的變動)
   const keys = new Set([...Object.keys(filteredTodayAgg), ...Object.keys(prevAgg)]);
   const flows = [];
   keys.forEach(code => {
@@ -226,7 +232,6 @@ function computeFlows(todaySnap, prevSnap, prices, newEtfs) {
     const prev_lots = p ? p.total_lots : 0;
     const diff = today_lots - prev_lots;
     const price = prices[code] ?? null;
-    // 為了顯示完整的「今日 ETF 持有數」在 modal/個股頁裡,我們另外帶上「包含新 ETF」的總張數
     const todayAggFull = aggregate(todaySnap, prices);
     const full_today_lots = todayAggFull[code] ? todayAggFull[code].total_lots : 0;
     const full_etf_count = todayAggFull[code] ? todayAggFull[code].etf_count : 0;
@@ -236,7 +241,6 @@ function computeFlows(todaySnap, prevSnap, prices, newEtfs) {
       diff_pct: prev_lots > 0 ? (diff / prev_lots) * 100 : (today_lots > 0 ? 999 : 0),
       price, diff_value: price ? diff * 1000 * price : null,
       etf_count: full_etf_count,
-      // 提供給 UI 顯示: 有沒有新 ETF 也持有這檔股票
       has_new_etf: full_today_lots !== today_lots,
     });
   });
@@ -266,13 +270,13 @@ function renderModal() {
   const diff = stock.total_lots - prevLots;
 
   content.innerHTML = `
-    <div class="p-4 border-b border-slate-700 flex items-start justify-between">
-      <div>
-        <div class="flex items-baseline gap-2">
-          <span class="font-bold text-xl">${esc(stock.name)}</span>
-          <span class="text-sm text-slate-400">${esc(stock.code)}</span>
+    <div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <div class="flex items-baseline gap-2 flex-wrap">
+          <span class="font-bold text-lg sm:text-xl">${esc(stock.name)}</span>
+          <span class="text-xs sm:text-sm text-slate-400">${esc(stock.code)}</span>
         </div>
-        <div class="text-xs text-slate-400 mt-1">
+        <div class="text-xs text-slate-400 mt-1 leading-relaxed">
           合計 <span class="text-slate-200 font-semibold">${fmt(stock.total_lots)}</span> 張
           · <span class="text-amber-400">${stock.etf_count}</span> 檔 ETF 持有
           · 收盤 ${stock.price?fmt(stock.price,2):'N/A'}
@@ -286,17 +290,17 @@ function renderModal() {
           </span>
         </div>
       </div>
-      <button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2">×</button>
+      <button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button>
     </div>
     <div class="overflow-y-auto flex-1">
       <table class="w-full text-sm">
         <thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0">
           <tr>
-            <th class="px-3 py-2 text-left">#</th>
-            <th class="px-3 py-2 text-left">ETF</th>
-            <th class="px-3 py-2 text-right">持有張數</th>
-            <th class="px-3 py-2 text-right">前日變動</th>
-            <th class="px-3 py-2 text-right">佔ETF比重</th>
+            <th class="px-2 sm:px-3 py-2 text-left">#</th>
+            <th class="px-2 sm:px-3 py-2 text-left">ETF</th>
+            <th class="px-2 sm:px-3 py-2 text-right">持有張數</th>
+            <th class="px-2 sm:px-3 py-2 text-right">前日變動</th>
+            <th class="px-2 sm:px-3 py-2 text-right">佔比</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800">
@@ -305,16 +309,16 @@ function renderModal() {
             const pv = (DATA.prev?.[e.etf]?.holdings || []).find(h => h.code === stock.code);
             const d = e.lots - (pv?.lots || 0);
             return `<tr class="hover:bg-slate-800/30 ${isNew?'bg-amber-950/20':''}">
-              <td class="px-3 py-2 text-slate-500">${i+1}</td>
-              <td class="px-3 py-2">
-                <div class="text-slate-200">${esc(e.etf_name)}${isNew?' <span class="text-xs bg-amber-600/30 text-amber-300 px-1.5 py-0.5 rounded ml-1">新增首日</span>':''}</div>
-                <div class="text-xs text-slate-500">${esc(e.etf)}</div>
+              <td class="px-2 sm:px-3 py-2 text-slate-500">${i+1}</td>
+              <td class="px-2 sm:px-3 py-2">
+                <div class="text-slate-200 text-xs sm:text-sm">${esc(e.etf_name)}${isNew?' <span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 py-0.5 rounded ml-1">新</span>':''}</div>
+                <div class="text-[10px] sm:text-xs text-slate-500">${esc(e.etf)}</div>
               </td>
-              <td class="px-3 py-2 text-right num font-semibold text-slate-100">${fmt(e.lots)}</td>
-              <td class="px-3 py-2 text-right num text-xs ${isNew?'text-amber-400':(d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500')}">
-                ${isNew?'— 首日':(d!==0?(d>0?'+':'')+fmt(d):'—')}
+              <td class="px-2 sm:px-3 py-2 text-right num font-semibold text-slate-100">${fmt(e.lots)}</td>
+              <td class="px-2 sm:px-3 py-2 text-right num text-xs ${isNew?'text-amber-400':(d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500')}">
+                ${isNew?'首日':(d!==0?(d>0?'+':'')+fmt(d):'—')}
               </td>
-              <td class="px-3 py-2 text-right num text-xs text-slate-400">${e.weight}%</td>
+              <td class="px-2 sm:px-3 py-2 text-right num text-xs text-slate-400">${e.weight}%</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -343,14 +347,9 @@ function render() {
     return;
   }
 
-  // 偵測新 ETF
   NEW_ETFS = detectNewEtfs(DATA.today, DATA.prev);
-
-  // 彙總(包含新 ETF — 用於市值/個股查詢等「現況」呈現)
   const todayAgg = aggregate(DATA.today, DATA.prices||{});
   const prevAgg = aggregate(DATA.prev||{}, DATA.prices||{});
-
-  // 買賣超(排除新 ETF 貢獻)
   const flows = computeFlows(DATA.today, DATA.prev||{}, DATA.prices||{}, NEW_ETFS);
   const buy = flows.filter(f=>f.diff>0).sort((a,b)=>b.diff-a.diff).slice(0, TOP_N);
   const sell = flows.filter(f=>f.diff<0).sort((a,b)=>a.diff-b.diff).slice(0, TOP_N);
@@ -359,7 +358,6 @@ function render() {
   document.getElementById('header-sub').textContent = `${Object.keys(DATA.today).length} 檔 ETF · ${Object.keys(todayAgg).length} 檔個股`;
   document.getElementById('update-info').innerHTML = `📅 ${DATA.today_date} <span class="text-slate-500">vs</span> ${DATA.prev_date||'—'}`;
 
-  // 新 ETF 橫幅
   if (NEW_ETFS.length > 0 && banner) {
     const names = NEW_ETFS.map(k => {
       const n = DATA.today[k]?.name || k;
@@ -386,13 +384,13 @@ function render() {
 function renderOverview(todayAgg, buy, sell, mv) {
   const totalMV = Object.values(todayAgg).reduce((s,r)=>s+(r.market_value||0),0);
   return `
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-5">
     ${statCard('追蹤 ETF', Object.keys(DATA.today).length, '檔', 'amber')}
     ${statCard('持股個股', Object.keys(todayAgg).length, '檔', 'sky')}
     ${statCard('今日買超', buy.length, '檔(TOP20)', 'emerald')}
     ${statCard('今日賣超', sell.length, '檔(TOP20)', 'rose')}
   </div>
-  <div class="grid lg:grid-cols-3 gap-4">
+  <div class="grid lg:grid-cols-3 gap-3 sm:gap-4">
     ${dashCard('買超 TOP 20', '📈', 'emerald', miniFlow(buy, 'buy'))}
     ${dashCard('賣超 TOP 20', '📉', 'rose', miniFlow(sell, 'sell'))}
     ${dashCard('市值 TOP 20', '💰', 'amber', miniMV(mv, totalMV))}
@@ -402,9 +400,9 @@ function renderOverview(todayAgg, buy, sell, mv) {
 
 function statCard(label, value, suffix, color) {
   const cls = {amber:'from-amber-500/20 to-amber-500/5 border-amber-500/30', sky:'from-sky-500/20 to-sky-500/5 border-sky-500/30', emerald:'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30', rose:'from-rose-500/20 to-rose-500/5 border-rose-500/30'}[color];
-  return `<div class="bg-gradient-to-br ${cls} border rounded-lg p-3">
+  return `<div class="bg-gradient-to-br ${cls} border rounded-lg p-2.5 sm:p-3">
     <div class="text-xs text-slate-400 mb-1">${esc(label)}</div>
-    <div class="flex items-baseline gap-1"><div class="text-2xl font-bold">${fmt(value)}</div><div class="text-xs text-slate-400">${esc(suffix)}</div></div></div>`;
+    <div class="flex items-baseline gap-1"><div class="text-xl sm:text-2xl font-bold">${fmt(value)}</div><div class="text-xs text-slate-400">${esc(suffix)}</div></div></div>`;
 }
 
 function dashCard(title, icon, color, inner) {
@@ -418,11 +416,11 @@ function miniFlow(rows, dir) {
   if (!rows.length) return '<div class="p-4 text-sm text-slate-500 text-center">無資料</div>';
   const color = dir === 'buy' ? 'text-emerald-400' : 'text-rose-400';
   return '<div class="divide-y divide-slate-800">' + rows.map((r,i) => `
-    <div class="px-4 py-2 flex items-center justify-between text-sm">
+    <div class="px-3 sm:px-4 py-2 flex items-center justify-between text-sm gap-2">
       <div class="flex items-center gap-2 min-w-0 flex-1">
-        <span class="text-xs text-slate-500 w-6">${i+1}</span>
+        <span class="text-xs text-slate-500 w-5 sm:w-6 flex-shrink-0">${i+1}</span>
         <span class="text-slate-300 truncate stock-link" onclick="openStockModal('${esc(r.code)}')">${esc(r.name)}</span>
-        <span class="text-xs text-slate-500">${esc(r.code)}</span>
+        <span class="text-xs text-slate-500 flex-shrink-0">${esc(r.code)}</span>
       </div>
       <span class="num font-semibold ${color} flex-shrink-0">${r.diff>0?'+':''}${fmt(r.diff)}</span>
     </div>`).join('') + '</div>';
@@ -431,17 +429,17 @@ function miniFlow(rows, dir) {
 function miniMV(rows, total) {
   if (!rows.length) return '<div class="p-4 text-sm text-slate-500 text-center">無資料</div>';
   return '<div class="divide-y divide-slate-800">' + rows.map((r,i) => `
-    <div class="px-4 py-2 flex items-center justify-between text-sm">
+    <div class="px-3 sm:px-4 py-2 flex items-center justify-between text-sm gap-2">
       <div class="flex items-center gap-2 min-w-0 flex-1">
-        <span class="text-xs text-slate-500 w-6">${i+1}</span>
+        <span class="text-xs text-slate-500 w-5 sm:w-6 flex-shrink-0">${i+1}</span>
         <span class="text-slate-300 truncate stock-link" onclick="openStockModal('${esc(r.code)}')">${esc(r.name)}</span>
-        <span class="text-xs text-slate-500">${esc(r.code)}</span>
+        <span class="text-xs text-slate-500 flex-shrink-0">${esc(r.code)}</span>
       </div>
       <span class="num text-amber-400 font-semibold flex-shrink-0">${fmtM(r.market_value)}</span>
     </div>`).join('') + '</div>';
 }
 
-// ========== 買賣超 TOP 20 (可排序, 移除 %) ==========
+// ========== 買賣超 TOP 20 ==========
 function renderFlowTable(rows, dir) {
   const color = dir === 'buy' ? 'emerald' : 'rose';
   const label = dir === 'buy' ? '買超' : '賣超';
@@ -462,9 +460,9 @@ function renderFlowTable(rows, dir) {
     ? `<div class="text-xs text-amber-400 mb-2">⚠️ 已排除新增 ETF (${NEW_ETFS.join(', ')}) 首日持股</div>`
     : '';
 
-  return `<h2 class="text-lg font-semibold mb-3">${label} TOP ${TOP_N} (單位:張)</h2>
+  return `<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">${label} TOP ${TOP_N} <span class="text-xs text-slate-500 font-normal">(單位:張)</span></h2>
   ${newEtfNote}
-  <div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看「哪幾檔 ETF 持有」· 點擊欄位標題排序(降序→升序→預設)</div>
+  <div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看持有 ETF · 點擊欄位標題排序</div>
   <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-slate-800/50 text-slate-400 text-xs">
@@ -480,18 +478,21 @@ function renderFlowTable(rows, dir) {
       <tbody class="divide-y divide-slate-800">
         ${sorted.map((r,i) => `<tr class="hover:bg-slate-800/30">
           <td class="px-2 py-2 text-slate-500">${i+1}</td>
-          <td class="px-2 py-2 stock-link" onclick="openStockModal('${esc(r.code)}')"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)} · ${r.etf_count}檔持有${r.has_new_etf?' <span class="text-amber-400">(含新)</span>':''}</div></td>
+          <td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal('${esc(r.code)}')">
+            <div class="text-slate-200 stk-name">${esc(r.name)}</div>
+            <div class="text-xs text-slate-500 stk-meta">${esc(r.code)} · ${r.etf_count}檔${r.has_new_etf?'<span class="text-amber-400">(含新)</span>':''}</div>
+          </td>
           <td class="px-2 py-2 text-right num text-slate-400">${fmt(r.prev_lots)}</td>
           <td class="px-2 py-2 text-right num">${fmt(r.today_lots)}</td>
           <td class="px-2 py-2 text-right num font-semibold text-${color}-400">${r.diff>0?'+':''}${fmt(r.diff)}</td>
-          <td class="px-2 py-2 text-right num text-xs text-${color}-400">${r.diff_value!=null?(r.diff>0?'+':'')+fmtM(r.diff_value):'-'}</td>
+          <td class="px-2 py-2 text-right num text-xs text-${color}-400 whitespace-nowrap">${r.diff_value!=null?(r.diff>0?'+':'')+fmtM(r.diff_value):'-'}</td>
         </tr>`).join('')}
       </tbody>
     </table>
   </div>`;
 }
 
-// ========== 市值 TOP 20 (可排序) ==========
+// ========== 市值 TOP 20 ==========
 function renderMV(rows, total) {
   const keyMap = {
     name: (r) => r.name,
@@ -504,9 +505,11 @@ function renderMV(rows, total) {
   const sorted = sortRows(rows, mvSort, keyMap);
   const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleMvSort('${key}')">${esc(label)}${sortIcon(mvSort, key)}</th>`;
 
-  return `<h2 class="text-lg font-semibold mb-3">合計市值 TOP ${TOP_N}</h2>
-  <div class="text-sm text-slate-400 mb-3">所有 ETF 合計市值:<span class="text-amber-400 font-semibold ml-2">${fmtM(total)}</span>
-  <span class="ml-4 text-xs text-slate-500">💡 點擊欄位標題排序(降序→升序→預設) · 點擊最右邊 ETF 徽章查看持有 ETF</span></div>
+  return `<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">合計市值 TOP ${TOP_N}</h2>
+  <div class="text-xs sm:text-sm text-slate-400 mb-3">
+    所有 ETF 合計市值:<span class="text-amber-400 font-semibold ml-2">${fmtM(total)}</span>
+    <div class="text-xs text-slate-500 mt-1">💡 點擊欄位標題排序 · 點擊最右邊 ETF 徽章查看持有 ETF</div>
+  </div>
   <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-slate-800/50 text-slate-400 text-xs">
@@ -523,10 +526,13 @@ function renderMV(rows, total) {
       <tbody class="divide-y divide-slate-800">
         ${sorted.map((r,i) => `<tr class="hover:bg-slate-800/30">
           <td class="px-2 py-2 text-slate-500">${i+1}</td>
-          <td class="px-2 py-2 stock-link" onclick="openStockModal('${esc(r.code)}')"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)}</div></td>
+          <td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal('${esc(r.code)}')">
+            <div class="text-slate-200 stk-name">${esc(r.name)}</div>
+            <div class="text-xs text-slate-500 stk-meta">${esc(r.code)}</div>
+          </td>
           <td class="px-2 py-2 text-right num">${fmt(r.total_lots)}</td>
           <td class="px-2 py-2 text-right num text-slate-400">${r.price?fmt(r.price,2):'-'}</td>
-          <td class="px-2 py-2 text-right num text-amber-400 font-semibold">${fmtM(r.market_value)}</td>
+          <td class="px-2 py-2 text-right num text-amber-400 font-semibold whitespace-nowrap">${fmtM(r.market_value)}</td>
           <td class="px-2 py-2 text-right num text-xs text-slate-400">${((r.market_value/total)*100).toFixed(2)}%</td>
           <td class="px-2 py-2 text-center"><button onclick="openStockModal('${esc(r.code)}')" class="bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-xs transition cursor-pointer">${r.etf_count}</button></td>
         </tr>`).join('')}
@@ -535,7 +541,7 @@ function renderMV(rows, total) {
   </div>`;
 }
 
-// ========== ETF 明細 (可排序) ==========
+// ========== ETF 明細 ==========
 function renderETF() {
   const etfKeys = Object.keys(DATA.today);
   if (!selectedEtf || !DATA.today[selectedEtf]) selectedEtf = etfKeys[0];
@@ -570,33 +576,33 @@ function renderETF() {
   const newTag = isNewEtf ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">新增首日</span>' : '';
   const newNote = isNewEtf ? '<div class="text-xs text-amber-400 mt-1">⚠️ 此 ETF 今日首次納入追蹤,持股變動不計入買賣超</div>' : '';
 
-  return `<h2 class="text-lg font-semibold mb-3">ETF 明細</h2>
-  <div class="flex gap-2 flex-wrap mb-4">
+  return `<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">ETF 明細</h2>
+  <div class="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 mb-4">
     ${etfKeys.map(k => {
       const isNew = NEW_ETFS.includes(k);
       const base = k===selectedEtf ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
       const badge = isNew ? ' <span class="text-[10px] bg-amber-400/30 px-1 rounded">新</span>' : '';
-      return `<button data-etf="${esc(k)}" class="etf-btn px-3 py-1.5 text-sm rounded ${base}">${esc(k)}${badge}</button>`;
+      return `<button data-etf="${esc(k)}" class="etf-btn px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ${base} whitespace-nowrap">${esc(k)}${badge}</button>`;
     }).join('')}
   </div>
-  <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
-    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
-      <div>
-        <div class="font-semibold">${esc(today.name)} (${esc(selectedEtf)})${newTag}</div>
-        <div class="text-xs text-slate-400">資料日期 ${esc(today.holdings_date||'-')} · ${rows.length} 檔 · 合計市值 ${fmtM(totalMV)}</div>
+  <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4">
+    <div class="flex items-start justify-between flex-wrap gap-2 mb-3">
+      <div class="min-w-0">
+        <div class="font-semibold text-sm sm:text-base">${esc(today.name)} (${esc(selectedEtf)})${newTag}</div>
+        <div class="text-xs text-slate-400 mt-0.5">資料日期 ${esc(today.holdings_date||'-')} · ${rows.length} 檔 · 合計市值 ${fmtM(totalMV)}</div>
         ${newNote}
       </div>
-      <div class="text-xs text-slate-500">💡 點擊欄位標題排序(降序→升序→預設)</div>
     </div>
-    <div class="overflow-x-auto">
+    <div class="text-xs text-slate-500 mb-2">💡 點擊欄位標題排序</div>
+    <div class="overflow-x-auto -mx-3 sm:mx-0">
       <table class="w-full text-sm">
         <thead class="bg-slate-800/50 text-slate-400 text-xs">
           <tr>
             <th class="px-2 py-2 text-left">#</th>
             ${th('股票', 'name', 'left')}
             ${th('比例', 'weight')}
-            ${th('前日張', 'prev_lots')}
-            ${th('今日張', 'lots')}
+            ${th('前日', 'prev_lots')}
+            ${th('今日', 'lots')}
             ${th('增減', 'diff')}
             ${th('收盤', 'price')}
             ${th('市值', 'mv')}
@@ -605,13 +611,16 @@ function renderETF() {
         <tbody class="divide-y divide-slate-800">
           ${rows.map((r,i) => `<tr class="hover:bg-slate-800/30">
             <td class="px-2 py-1.5 text-slate-500">${i+1}</td>
-            <td class="px-2 py-1.5 stock-link" onclick="openStockModal('${esc(r.code)}')"><div class="text-slate-200">${esc(r.name)}</div><div class="text-xs text-slate-500">${esc(r.code)}</div></td>
+            <td class="px-2 py-1.5 stock-cell stock-link" onclick="openStockModal('${esc(r.code)}')">
+              <div class="text-slate-200 stk-name">${esc(r.name)}</div>
+              <div class="text-xs text-slate-500 stk-meta">${esc(r.code)}</div>
+            </td>
             <td class="px-2 py-1.5 text-right num">${r.weight.toFixed(2)}%</td>
             <td class="px-2 py-1.5 text-right num text-slate-400">${isNewEtf?'—':fmt(r.prev_lots)}</td>
             <td class="px-2 py-1.5 text-right num">${fmt(r.lots)}</td>
             <td class="px-2 py-1.5 text-right num ${isNewEtf?'text-amber-400':(r.diff>0?'text-emerald-400':r.diff<0?'text-rose-400':'text-slate-500')}">${isNewEtf?'首日':(r.diff!==0?(r.diff>0?'+':'')+fmt(r.diff):'—')}</td>
             <td class="px-2 py-1.5 text-right num text-slate-400">${r.price?fmt(r.price,2):'-'}</td>
-            <td class="px-2 py-1.5 text-right num text-amber-400">${fmtM(r.mv)}</td>
+            <td class="px-2 py-1.5 text-right num text-amber-400 whitespace-nowrap">${fmtM(r.mv)}</td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -630,28 +639,28 @@ function renderStock(todayAgg, prevAgg) {
   const filtered = stockSearch.trim() ? all.filter(s => s.code.includes(stockSearch) || s.name.includes(stockSearch)) : all.sort((a,b)=>b.total_lots-a.total_lots).slice(0, 30);
   const detail = selectedStock && todayAgg[selectedStock];
   const prev = selectedStock && prevAgg[selectedStock];
-  return `<h2 class="text-lg font-semibold mb-3">個股查詢</h2>
+  return `<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">個股查詢</h2>
   <input id="stock-search" value="${esc(stockSearch)}" placeholder="輸入股票代號或名稱 (如 2330 或 台積電)" class="w-full md:max-w-md bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm mb-4 focus:outline-none focus:border-amber-500">
-  <div class="grid md:grid-cols-2 gap-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden max-h-[70vh] overflow-y-auto">
-      <div class="px-4 py-2 text-xs text-slate-400 border-b border-slate-800">${stockSearch.trim()?`符合 ${filtered.length} 檔`:'合計持股 TOP 30'}</div>
+  <div class="grid md:grid-cols-2 gap-3 sm:gap-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden max-h-[60vh] md:max-h-[70vh] overflow-y-auto">
+      <div class="px-4 py-2 text-xs text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-900">${stockSearch.trim()?`符合 ${filtered.length} 檔`:'合計持股 TOP 30'}</div>
       <div class="divide-y divide-slate-800">
-        ${filtered.map(s => `<button data-code="${esc(s.code)}" class="stk-btn w-full px-4 py-2 text-left flex items-center justify-between hover:bg-slate-800/50 ${selectedStock===s.code?'bg-slate-800':''}">
-          <div><div class="text-slate-200 text-sm">${esc(s.name)}</div><div class="text-xs text-slate-500">${esc(s.code)} · ${s.etf_count}檔持有</div></div>
-          <div class="text-right"><div class="text-sm num">${fmt(s.total_lots)}張</div><div class="text-xs text-amber-400 num">${fmtM(s.market_value)}</div></div>
+        ${filtered.map(s => `<button data-code="${esc(s.code)}" class="stk-btn w-full px-3 sm:px-4 py-2 text-left flex items-center justify-between gap-2 hover:bg-slate-800/50 ${selectedStock===s.code?'bg-slate-800':''}">
+          <div class="min-w-0"><div class="text-slate-200 text-sm truncate">${esc(s.name)}</div><div class="text-xs text-slate-500">${esc(s.code)} · ${s.etf_count}檔持有</div></div>
+          <div class="text-right flex-shrink-0"><div class="text-sm num">${fmt(s.total_lots)}張</div><div class="text-xs text-amber-400 num">${fmtM(s.market_value)}</div></div>
         </button>`).join('') || '<div class="p-8 text-center text-sm text-slate-500">無符合</div>'}
       </div>
     </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-lg p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4">
       ${!detail ? '<div class="text-center text-sm text-slate-500 py-12">選擇左側個股查看詳情</div>' : `
-      <div class="flex items-center justify-between mb-3">
-        <div><div class="font-bold text-lg">${esc(detail.name)}</div><div class="text-xs text-slate-400">${esc(detail.code)} · 收盤 ${detail.price?fmt(detail.price,2):'N/A'}</div></div>
-        <div class="text-right"><div class="text-xs text-slate-500">合計市值</div><div class="text-amber-400 font-bold">${fmtM(detail.market_value)}</div></div>
+      <div class="flex items-center justify-between mb-3 gap-2">
+        <div class="min-w-0"><div class="font-bold text-base sm:text-lg truncate">${esc(detail.name)}</div><div class="text-xs text-slate-400">${esc(detail.code)} · 收盤 ${detail.price?fmt(detail.price,2):'N/A'}</div></div>
+        <div class="text-right flex-shrink-0"><div class="text-xs text-slate-500">合計市值</div><div class="text-amber-400 font-bold">${fmtM(detail.market_value)}</div></div>
       </div>
       <div class="grid grid-cols-3 gap-2 mb-4 text-center">
-        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">今日合計</div><div class="num font-semibold">${fmt(detail.total_lots)}張</div></div>
-        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">前日合計</div><div class="num">${fmt(prev?.total_lots||0)}張</div></div>
-        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">變動</div><div class="num font-semibold ${(detail.total_lots-(prev?.total_lots||0))>0?'text-emerald-400':(detail.total_lots-(prev?.total_lots||0))<0?'text-rose-400':''}">${(detail.total_lots-(prev?.total_lots||0))>0?'+':''}${fmt(detail.total_lots-(prev?.total_lots||0))}</div></div>
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">今日合計</div><div class="num font-semibold text-sm">${fmt(detail.total_lots)}張</div></div>
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">前日合計</div><div class="num text-sm">${fmt(prev?.total_lots||0)}張</div></div>
+        <div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">變動</div><div class="num font-semibold text-sm ${(detail.total_lots-(prev?.total_lots||0))>0?'text-emerald-400':(detail.total_lots-(prev?.total_lots||0))<0?'text-rose-400':''}">${(detail.total_lots-(prev?.total_lots||0))>0?'+':''}${fmt(detail.total_lots-(prev?.total_lots||0))}</div></div>
       </div>
       <div class="text-xs text-slate-400 mb-2">持有此股的 ETF (${detail.etfs.length}檔):</div>
       <div class="space-y-1">
@@ -659,16 +668,16 @@ function renderStock(todayAgg, prevAgg) {
           const isNew = NEW_ETFS.includes(e.etf);
           const pv = (DATA.prev?.[e.etf]?.holdings||[]).find(h=>h.code===detail.code);
           const d = e.lots - (pv?.lots||0);
-          return `<div class="flex items-center justify-between bg-slate-800/50 rounded px-2 py-1.5 text-sm ${isNew?'border-l-2 border-amber-500':''}">
-            <div>
+          return `<div class="flex items-center justify-between bg-slate-800/50 rounded px-2 py-1.5 text-xs sm:text-sm ${isNew?'border-l-2 border-amber-500':''} gap-2">
+            <div class="min-w-0">
               <span class="text-slate-300">${esc(e.etf_name)}</span>
               <span class="text-xs text-slate-500 ml-1">${esc(e.etf)}</span>
-              ${isNew?'<span class="text-xs bg-amber-600/30 text-amber-300 px-1 rounded ml-1">新</span>':''}
+              ${isNew?'<span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 rounded ml-1">新</span>':''}
             </div>
-            <div class="flex items-center gap-2 text-xs">
+            <div class="flex items-center gap-2 text-xs flex-shrink-0">
               <span class="text-slate-400">${e.weight}%</span>
               <span class="num text-slate-200">${fmt(e.lots)}張</span>
-              <span class="num font-semibold w-16 text-right ${isNew?'text-amber-400':(d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500')}">${isNew?'首日':(d!==0?(d>0?'+':'')+fmt(d):'—')}</span>
+              <span class="num font-semibold w-14 sm:w-16 text-right ${isNew?'text-amber-400':(d>0?'text-emerald-400':d<0?'text-rose-400':'text-slate-500')}">${isNew?'首日':(d!==0?(d>0?'+':'')+fmt(d):'—')}</span>
             </div></div>`;
         }).join('')}
       </div>`}
