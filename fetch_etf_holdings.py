@@ -72,7 +72,7 @@ def fetch_etf_holdings(etf_code, session, retries=3):
         if m:
             etf_name = m.group(1).strip()
 
-    m = re.search(r"資料日期[\s::]*?(\d{4}/\d{1,2}/\d{1,2})", text_all)
+    m = re.search(r"資料日期[^\d]{0,5}(\d{4}/\d{1,2}/\d{1,2})", text_all)
     holdings_date = m.group(1) if m else None
 
     # Debug: 日期抓不到時印出診斷資訊
