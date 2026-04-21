@@ -93,7 +93,14 @@ def fetch_etf_holdings(etf_code, session, retries=3):
             target_table = table
             break
 
-    if target_table is None:
+   if target_table is None:
+        # Debug: 印出 HTML 片段幫助診斷
+        print(f"      [DEBUG {etf_code}] HTTP 狀態={r.status_code}, 長度={len(r.text)}")
+        print(f"      [DEBUG {etf_code}] 前 500 字元: {r.text[:500]}")
+        print(f"      [DEBUG {etf_code}] 含 '持有股數': {'持有股數' in r.text}")
+        print(f"      [DEBUG {etf_code}] 含 '個股名稱': {'個股名稱' in r.text}")
+        print(f"      [DEBUG {etf_code}] 含 'Cloudflare': {'Cloudflare' in r.text or 'cloudflare' in r.text}")
+        print(f"      [DEBUG {etf_code}] 含 'cf-ray': {'cf-ray' in r.text.lower()}")
         raise ValueError("找不到持股表格")
 
     holdings = []
