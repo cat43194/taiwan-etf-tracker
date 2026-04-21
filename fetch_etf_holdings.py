@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v6: 找不到表格時印 debug log,幫助診斷 00984A 失聯原因
+v7: 
+ - 加 holdings_date 解析失敗時的 debug log
+ - 當所有 ETF 的 holdings_date 都是 None 時,擋下寫檔避免污染
 """
 
 import re
@@ -73,6 +75,19 @@ def fetch_etf_holdings(etf_code, session, retries=3):
     m = re.search(r"資料日期[\s::]*?(\d{4}/\d{1,2}/\d{1,2})", text_all)
     holdings_date = m.group(1) if m else None
 
+    # Debug: 日期抓不到時印出診斷資訊
+    if holdings_date is None:
+        print(f"\n      [DATE DEBUG {etf_code}] 抓不到 holdings_date")
+        print(f"      [DATE DEBUG {etf_code}] 頁面長度={len(r.text)}, 狀態={r.status_code}")
+        print(f"      [DATE DEBUG {etf_code}] 含 '資料日期': {'資料日期' in text_all}")
+        date_matches = re.findall(r"\d{4}/\d{1,2}/\d{1,2}", text_all[:5000])
+        print(f"      [DATE DEBUG {etf_code}] 前 5000 字內找到的日期樣式: {date_matches[:5]}")
+        idx = text_all.find("資料日期")
+        if idx >= 0:
+            print(f"      [DATE DEBUG {etf_code}] '資料日期' 附近 100 字: ...{text_all[idx:idx+100]}...")
+        else:
+            print(f"      [DATE DEBUG {etf_code}] 找不到 '資料日期' 四個字 (可能頁面改版或不完整)")
+
     target_table = None
     for table in soup.find_all("table"):
         headers_text = " ".join(th.get_text(strip=True) for th in table.find_all("th"))
@@ -81,7 +96,6 @@ def fetch_etf_holdings(etf_code, session, retries=3):
             break
 
     if target_table is None:
-        # Debug: 印出失敗診斷資訊
         print(f"      [DEBUG {etf_code}] HTTP 狀態={r.status_code}, 回應長度={len(r.text)}")
         print(f"      [DEBUG {etf_code}] 含 '持有股數': {'持有股數' in r.text}")
         print(f"      [DEBUG {etf_code}] 含 '個股名稱': {'個股名稱' in r.text}")
@@ -493,7 +507,7 @@ def main():
             time.sleep(2)
 
     # ========================================================
-    # 未開盤日檢查
+    # holdings_date 檢查
     # ========================================================
     today_holdings_dates = [d["holdings_date"] for d in all_etf_data.values() if d.get("holdings_date")]
     if today_holdings_dates:
@@ -512,6 +526,18 @@ def main():
     print(f"\n  本次 holdings_date: {most_common_today_hd}")
     print(f"  上次 holdings_date: {most_common_prev_hd}")
 
+    # 防呆 1: 所有 ETF 的 holdings_date 都是 None -> 擋下
+    if most_common_today_hd is None:
+        print(f"\n{'='*60}")
+        print(f"🛑 holdings_date 全部抓不到")
+        print(f"{'='*60}")
+        print(f"  所有 ETF 的資料日期都解析失敗,可能 MoneyDJ 頁面異常")
+        print(f"  -> 為避免寫出無日期的快照, 本次不寫檔")
+        print(f"  -> 下次重跑若恢復正常會自動寫入")
+        print(f"{'='*60}\n")
+        return
+
+    # 防呆 2: 未開盤日偵測
     if most_common_today_hd and most_common_prev_hd and most_common_today_hd == most_common_prev_hd:
         print(f"\n{'='*60}")
         print(f"🛑 台股未開盤日偵測")
