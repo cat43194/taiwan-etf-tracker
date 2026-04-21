@@ -2,8 +2,10 @@ name: Daily ETF Fetch
 
 on:
   schedule:
-    # 台灣時間 19:00 = UTC 11:00
-    - cron: '0 11 * * *'
+    # 台灣時間 19:00-19:45 排 3 次,避免 GitHub Actions 延遲
+    - cron: '0 11 * * *'    # 台灣 19:00
+    - cron: '20 11 * * *'   # 台灣 19:20
+    - cron: '45 11 * * *'   # 台灣 19:45
   # 允許手動觸發（測試用）
   workflow_dispatch:
 
