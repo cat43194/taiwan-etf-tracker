@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v7: 
- - 加 holdings_date 解析失敗時的 debug log
- - 當所有 ETF 的 holdings_date 都是 None 時,擋下寫檔避免污染
+v8:
+ - 未開盤日偵測改為「任何一檔 ETF 有新 holdings_date 就通過」
+ - 修正 regex 為 [^\d]{0,5} 以穩定匹配全形冒號/空白
+ - 保留所有既有防呆: ETF 數量、holdings_date 全 None、Debug log
 """
 
 import re
@@ -72,6 +73,7 @@ def fetch_etf_holdings(etf_code, session, retries=3):
         if m:
             etf_name = m.group(1).strip()
 
+    # holdings_date 解析: 接受「資料日期」後 0-5 個非數字字元(全形冒號、空白等)
     m = re.search(r"資料日期[^\d]{0,5}(\d{4}/\d{1,2}/\d{1,2})", text_all)
     holdings_date = m.group(1) if m else None
 
@@ -507,13 +509,10 @@ def main():
             time.sleep(2)
 
     # ========================================================
-    # holdings_date 檢查
+    # holdings_date 眾數計算 (僅供顯示用)
     # ========================================================
     today_holdings_dates = [d["holdings_date"] for d in all_etf_data.values() if d.get("holdings_date")]
-    if today_holdings_dates:
-        most_common_today_hd = max(set(today_holdings_dates), key=today_holdings_dates.count)
-    else:
-        most_common_today_hd = None
+    most_common_today_hd = max(set(today_holdings_dates), key=today_holdings_dates.count) if today_holdings_dates else None
 
     prev_holdings_dates = []
     if prev_snapshot:
@@ -523,33 +522,57 @@ def main():
                 prev_holdings_dates.append(hd)
     most_common_prev_hd = max(set(prev_holdings_dates), key=prev_holdings_dates.count) if prev_holdings_dates else None
 
-    print(f"\n  本次 holdings_date: {most_common_today_hd}")
-    print(f"  上次 holdings_date: {most_common_prev_hd}")
+    print(f"\n  本次 holdings_date 眾數: {most_common_today_hd}")
+    print(f"  上次 holdings_date 眾數: {most_common_prev_hd}")
 
-    # 防呆 1: 所有 ETF 的 holdings_date 都是 None -> 擋下
+    # ========================================================
+    # 防呆 1: holdings_date 全部抓不到 -> 擋下
+    # ========================================================
     if most_common_today_hd is None:
         print(f"\n{'='*60}")
         print(f"🛑 holdings_date 全部抓不到")
         print(f"{'='*60}")
         print(f"  所有 ETF 的資料日期都解析失敗,可能 MoneyDJ 頁面異常")
         print(f"  -> 為避免寫出無日期的快照, 本次不寫檔")
-        print(f"  -> 下次重跑若恢復正常會自動寫入")
-        print(f"{'='*60}\n")
-        return
-
-    # 防呆 2: 未開盤日偵測
-    if most_common_today_hd and most_common_prev_hd and most_common_today_hd == most_common_prev_hd:
-        print(f"\n{'='*60}")
-        print(f"🛑 台股未開盤日偵測")
-        print(f"{'='*60}")
-        print(f"  本次與上次的 holdings_date 相同 ({most_common_today_hd})")
-        print(f"  -> 不寫新快照, latest.json 保持不變")
-        print(f"  -> 下次開市會直接跟 {most_common_prev_hd} 比對")
         print(f"{'='*60}\n")
         return
 
     # ========================================================
-    # ETF 數量防呆
+    # 防呆 2: 未開盤日偵測 (新邏輯: 任何一檔 ETF 有新資料就通過)
+    # ========================================================
+    has_any_update = False
+    update_detail = []  # 記錄哪些 ETF 有更新
+
+    if prev_snapshot:
+        prev_today = prev_snapshot.get("today", {}) or {}
+        for etf_code, today_data in all_etf_data.items():
+            today_hd = today_data.get("holdings_date")
+            prev_hd = (prev_today.get(etf_code) or {}).get("holdings_date")
+            if today_hd and (not prev_hd or today_hd > prev_hd):
+                has_any_update = True
+                update_detail.append(f"{etf_code}: {prev_hd or '(無)'} -> {today_hd}")
+    else:
+        # 沒有上次快照 = 首次執行,一律通過
+        has_any_update = True
+        update_detail.append("(首次執行,無上次快照)")
+
+    if not has_any_update:
+        print(f"\n{'='*60}")
+        print(f"🛑 台股未開盤日偵測 (無任何 ETF 有新資料)")
+        print(f"{'='*60}")
+        print(f"  所有 ETF 的 holdings_date 都跟上次快照相同或更舊")
+        print(f"  -> 本次不寫檔, latest.json 保持不變")
+        print(f"{'='*60}\n")
+        return
+
+    print(f"\n  有新資料的 ETF ({len(update_detail)} 檔):")
+    for d in update_detail[:5]:  # 最多印 5 檔避免 log 太長
+        print(f"    {d}")
+    if len(update_detail) > 5:
+        print(f"    ...(還有 {len(update_detail)-5} 檔)")
+
+    # ========================================================
+    # 防呆 3: ETF 數量異常
     # ========================================================
     today_etf_count = len(all_etf_data)
     prev_etf_count = len((prev_snapshot or {}).get("today") or {})
@@ -565,7 +588,6 @@ def main():
         missing = prev_keys - today_keys
         print(f"  失聯 ETF: {', '.join(sorted(missing))}")
         print(f"  -> 為避免污染 latest.json, 本次不寫檔")
-        print(f"  -> 下次重跑若恢復正常會自動寫入")
         print(f"{'='*60}\n")
         return
 
