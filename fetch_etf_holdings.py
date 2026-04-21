@@ -527,7 +527,27 @@ def main():
         print(f"  -> 下次開市會直接跟 {most_common_prev_hd} 比對")
         print(f"{'='*60}\n")
         return
+# ========================================================
+    # ETF 數量防呆: 今天抓到的 ETF 數量 < 上次快照,代表有 ETF 失聯
+    # 為避免寫出缺檔版本污染 latest.json,直接 abort
+    # ========================================================
+    today_etf_count = len(all_etf_data)
+    prev_etf_count = len((prev_snapshot or {}).get("today") or {})
 
+    if prev_etf_count > 0 and today_etf_count < prev_etf_count:
+        print(f"\n{'='*60}")
+        print(f"🛑 ETF 數量異常偵測")
+        print(f"{'='*60}")
+        print(f"  本次抓到: {today_etf_count} 檔")
+        print(f"  上次快照: {prev_etf_count} 檔")
+        today_keys = set(all_etf_data.keys())
+        prev_keys = set((prev_snapshot or {}).get("today", {}).keys())
+        missing = prev_keys - today_keys
+        print(f"  失聯 ETF: {', '.join(sorted(missing))}")
+        print(f"  -> 為避免污染 latest.json, 本次不寫檔")
+        print(f"  -> 下次重跑若恢復正常會自動寫入")
+        print(f"{'='*60}\n")
+        return
     # ========================================================
     # 抓收盤價
     # ========================================================
