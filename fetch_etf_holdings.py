@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v8:
- - 未開盤日偵測改為「任何一檔 ETF 有新 holdings_date 就通過」
- - 修正 regex 為 [^\d]{0,5} 以穩定匹配全形冒號/空白
- - 保留所有既有防呆: ETF 數量、holdings_date 全 None、Debug log
+v9:
+ - 用 MoneyDJ 的 holdings_date 眾數當檔名日期,避免 cron 延遲跨日
+ - 防呆: holdings_date 全 None / 未開盤日 / ETF 數量異常
+ - regex 寬鬆匹配全形冒號
 """
 
 import re
@@ -466,8 +466,9 @@ def main():
     out_dir = Path("snapshots")
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # 初始 today_date 用系統時間 (後面會被 MoneyDJ 的 holdings_date 覆蓋)
     today_date = datetime.now().strftime("%Y-%m-%d")
-    print(f"\n=== 台股主動式ETF 追蹤器 {today_date} ===\n")
+    print(f"\n=== 台股主動式ETF 追蹤器 (系統時間: {today_date}) ===\n")
 
     prev_date, prev_snapshot = find_prev_snapshot(out_dir, today_date)
     if prev_snapshot:
@@ -509,7 +510,7 @@ def main():
             time.sleep(2)
 
     # ========================================================
-    # holdings_date 眾數計算 (僅供顯示用)
+    # holdings_date 眾數計算
     # ========================================================
     today_holdings_dates = [d["holdings_date"] for d in all_etf_data.values() if d.get("holdings_date")]
     most_common_today_hd = max(set(today_holdings_dates), key=today_holdings_dates.count) if today_holdings_dates else None
@@ -538,10 +539,31 @@ def main():
         return
 
     # ========================================================
-    # 防呆 2: 未開盤日偵測 (新邏輯: 任何一檔 ETF 有新資料就通過)
+    # 關鍵: 用 holdings_date 當檔名日期,避免 cron 延遲跨日
+    # ========================================================
+    original_today_date = today_date
+    today_date = most_common_today_hd.replace("/", "-")
+    if original_today_date != today_date:
+        print(f"\n  ℹ️ 系統時間是 {original_today_date},但 MoneyDJ 資料日期是 {today_date}")
+        print(f"  ℹ️ 為避免 cron 延遲跨日造成資料錯位,改用 MoneyDJ 日期作為檔名")
+        # 重新找前一日快照(因為 today_date 可能變小了)
+        prev_date, prev_snapshot = find_prev_snapshot(out_dir, today_date)
+        if prev_snapshot:
+            print(f"  ℹ️ 重新載入前一日快照: {prev_date}")
+        # 重新計算上次 holdings_date 眾數
+        prev_holdings_dates = []
+        if prev_snapshot:
+            for etf_data in (prev_snapshot.get("today") or {}).values():
+                hd = etf_data.get("holdings_date")
+                if hd:
+                    prev_holdings_dates.append(hd)
+        most_common_prev_hd = max(set(prev_holdings_dates), key=prev_holdings_dates.count) if prev_holdings_dates else None
+
+    # ========================================================
+    # 防呆 2: 未開盤日偵測 (任何一檔 ETF 有新資料就通過)
     # ========================================================
     has_any_update = False
-    update_detail = []  # 記錄哪些 ETF 有更新
+    update_detail = []
 
     if prev_snapshot:
         prev_today = prev_snapshot.get("today", {}) or {}
@@ -552,7 +574,6 @@ def main():
                 has_any_update = True
                 update_detail.append(f"{etf_code}: {prev_hd or '(無)'} -> {today_hd}")
     else:
-        # 沒有上次快照 = 首次執行,一律通過
         has_any_update = True
         update_detail.append("(首次執行,無上次快照)")
 
@@ -566,7 +587,7 @@ def main():
         return
 
     print(f"\n  有新資料的 ETF ({len(update_detail)} 檔):")
-    for d in update_detail[:5]:  # 最多印 5 檔避免 log 太長
+    for d in update_detail[:5]:
         print(f"    {d}")
     if len(update_detail) > 5:
         print(f"    ...(還有 {len(update_detail)-5} 檔)")
@@ -627,6 +648,7 @@ def main():
     print(f"\n{'='*60}")
     print(f"執行結果")
     print(f"{'='*60}")
+    print(f"  檔名日期:   snapshot-{today_date}.json")
     print(f"  ETF 成功:   {len(snapshot['today'])}/{len(ETFS)}")
     if failed:
         print(f"  ETF 失敗:   {', '.join(failed)}")
