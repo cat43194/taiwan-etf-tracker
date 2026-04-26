@@ -71,9 +71,9 @@
   <!-- 分頁按鈕 -->
   <div class="max-w-7xl mx-auto px-2 sm:px-4 flex gap-0 sm:gap-1 overflow-x-auto border-t border-slate-800 text-sm">
     <button data-tab="overview" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">總覽</button>
-    <button data-tab="buy" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">買超 TOP 20</button>
-    <button data-tab="sell" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">賣超 TOP 20</button>
-    <button data-tab="mv" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">市值 TOP 20</button>
+    <button data-tab="buy" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">買超 TOP 30</button>
+    <button data-tab="sell" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">賣超 TOP 30</button>
+    <button data-tab="mv" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">市值 TOP 30</button>
     <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
   </div>
@@ -90,7 +90,7 @@
 </div>
 
 <footer class="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-slate-500 border-t border-slate-800 mt-10">
-  因各投信網站更新時間不同，每日 22:00 後自動更新 請耐心等待 僅供參考不構成投資建議 謝謝
+  因各投信網站更新時間不同,每日 22:00 後自動更新 請耐心等待 僅供參考不構成投資建議 謝謝
 </footer>
 
 </div>
@@ -138,7 +138,8 @@ if (!checkAuth()) { /* 顯示登入頁 */ }
 // ============================================================
 // 主邏輯
 // ============================================================
-const TOP_N = 20;
+const TOP_N = 30;          // 詳細頁顯示 30
+const TOP_N_OVERVIEW = 20; // 總覽首頁仍顯示 20
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
 let NEW_ETFS = [];
 
@@ -155,6 +156,22 @@ const fmtM = (n) => {
   return fmt(n);
 };
 const esc = s => String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+// ========== 排名變化顯示 ==========
+// 採台股配色: 排名上升 = 紅色 (熱門/被買進), 排名下降 = 綠色 (退燒/被賣出)
+function rankChangeHtml(todayRank, prevRank) {
+  if (prevRank == null) {
+    return `<span class="text-amber-400 text-xs font-semibold ml-1">NEW</span>`;
+  }
+  const diff = prevRank - todayRank; // 正數 = 排名上升 (例:昨20 今15 → diff=5)
+  if (diff > 0) {
+    return `<span class="text-rose-400 text-xs ml-1">↑${diff}</span>`;
+  }
+  if (diff < 0) {
+    return `<span class="text-emerald-400 text-xs ml-1">↓${Math.abs(diff)}</span>`;
+  }
+  return `<span class="text-slate-500 text-xs ml-1">—</span>`;
+}
 
 // ========== 排序工具 ==========
 function cycleSort(current, key) {
@@ -202,6 +219,34 @@ function aggregate(snapshot, prices) {
   });
   return map;
 }
+
+// 計算前一日的市值排名 map: { code: rank }
+function buildPrevRankMap(prevAgg, sortKey) {
+  const sorted = Object.values(prevAgg)
+    .filter(s => s[sortKey] != null && s[sortKey] !== 0)
+    .sort((a, b) => b[sortKey] - a[sortKey]);
+  const map = {};
+  sorted.forEach((s, i) => { map[s.code] = i + 1; });
+  return map;
+}
+
+// 計算前一日的買賣超排名 map: { code: rank }
+// dir = 'buy' 取正 diff 由大到小; dir = 'sell' 取負 diff 由小到大
+function buildPrevFlowRankMap(prevFlows, dir) {
+  let sorted;
+  if (dir === 'buy') {
+    sorted = prevFlows.filter(f => f.diff > 0).sort((a, b) => b.diff - a.diff);
+  } else {
+    sorted = prevFlows.filter(f => f.diff < 0).sort((a, b) => a.diff - b.diff);
+  }
+  const map = {};
+  sorted.forEach((f, i) => { map[f.code] = i + 1; });
+  return map;
+}
+
+// 計算「前一日的買賣超」需要的是: 前一日 vs 前前一日 的對比
+// 但 latest.json 只有 today / prev,沒有 prev_prev,所以買賣超排名變化暫不顯示
+// 改用「前一日的市值排名變化」,因為市值排名有意義且資料夠
 
 function detectNewEtfs(todaySnap, prevSnap) {
   const todayKeys = new Set(Object.keys(todaySnap || {}));
@@ -351,9 +396,19 @@ function render() {
   const todayAgg = aggregate(DATA.today, DATA.prices||{});
   const prevAgg = aggregate(DATA.prev||{}, DATA.prices||{});
   const flows = computeFlows(DATA.today, DATA.prev||{}, DATA.prices||{}, NEW_ETFS);
+
+  // 詳細頁用 TOP 30
   const buy = flows.filter(f=>f.diff>0).sort((a,b)=>b.diff-a.diff).slice(0, TOP_N);
   const sell = flows.filter(f=>f.diff<0).sort((a,b)=>a.diff-b.diff).slice(0, TOP_N);
   const mv = Object.values(todayAgg).filter(s=>s.market_value!=null).sort((a,b)=>b.market_value-a.market_value).slice(0, TOP_N);
+
+  // 總覽用 TOP 20
+  const buyOverview = flows.filter(f=>f.diff>0).sort((a,b)=>b.diff-a.diff).slice(0, TOP_N_OVERVIEW);
+  const sellOverview = flows.filter(f=>f.diff<0).sort((a,b)=>a.diff-b.diff).slice(0, TOP_N_OVERVIEW);
+  const mvOverview = Object.values(todayAgg).filter(s=>s.market_value!=null).sort((a,b)=>b.market_value-a.market_value).slice(0, TOP_N_OVERVIEW);
+
+  // 前一日市值排名 map (給市值排名變化用)
+  const prevMvRank = buildPrevRankMap(prevAgg, 'market_value');
 
   document.getElementById('header-sub').textContent = `${Object.keys(DATA.today).length} 檔 ETF · ${Object.keys(todayAgg).length} 檔個股`;
   document.getElementById('update-info').innerHTML = `📅 ${DATA.today_date} <span class="text-slate-500">vs</span> ${DATA.prev_date||'—'}`;
@@ -373,29 +428,29 @@ function render() {
     btn.classList.toggle('tab-active', btn.dataset.tab === currentTab);
   });
 
-  if (currentTab === 'overview') main.innerHTML = renderOverview(todayAgg, buy, sell, mv);
+  if (currentTab === 'overview') main.innerHTML = renderOverview(todayAgg, buyOverview, sellOverview, mvOverview, prevMvRank);
   else if (currentTab === 'buy') main.innerHTML = renderFlowTable(buy, 'buy');
   else if (currentTab === 'sell') main.innerHTML = renderFlowTable(sell, 'sell');
-  else if (currentTab === 'mv') main.innerHTML = renderMV(mv, Object.values(todayAgg).reduce((s,r)=>s+(r.market_value||0),0));
+  else if (currentTab === 'mv') main.innerHTML = renderMV(mv, Object.values(todayAgg).reduce((s,r)=>s+(r.market_value||0),0), prevMvRank);
   else if (currentTab === 'etf') { main.innerHTML = renderETF(); bindEtf(); }
   else if (currentTab === 'stock') { main.innerHTML = renderStock(todayAgg, prevAgg); bindStock(todayAgg, prevAgg); }
 }
 
-function renderOverview(todayAgg, buy, sell, mv) {
+function renderOverview(todayAgg, buy, sell, mv, prevMvRank) {
   const totalMV = Object.values(todayAgg).reduce((s,r)=>s+(r.market_value||0),0);
   return `
   <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-5">
     ${statCard('追蹤 ETF', Object.keys(DATA.today).length, '檔', 'amber')}
     ${statCard('持股個股', Object.keys(todayAgg).length, '檔', 'sky')}
-    ${statCard('今日買超', buy.length, '檔(TOP20)', 'emerald')}
-    ${statCard('今日賣超', sell.length, '檔(TOP20)', 'rose')}
+    ${statCard('今日買超', buy.length, '檔(TOP'+TOP_N_OVERVIEW+')', 'emerald')}
+    ${statCard('今日賣超', sell.length, '檔(TOP'+TOP_N_OVERVIEW+')', 'rose')}
   </div>
   <div class="grid lg:grid-cols-3 gap-3 sm:gap-4">
-    ${dashCard('買超 TOP 20', '📈', 'emerald', miniFlow(buy, 'buy'))}
-    ${dashCard('賣超 TOP 20', '📉', 'rose', miniFlow(sell, 'sell'))}
-    ${dashCard('市值 TOP 20', '💰', 'amber', miniMV(mv, totalMV))}
+    ${dashCard('買超 TOP '+TOP_N_OVERVIEW, '📈', 'emerald', miniFlow(buy, 'buy'))}
+    ${dashCard('賣超 TOP '+TOP_N_OVERVIEW, '📉', 'rose', miniFlow(sell, 'sell'))}
+    ${dashCard('市值 TOP '+TOP_N_OVERVIEW, '💰', 'amber', miniMV(mv, totalMV, prevMvRank))}
   </div>
-  <div class="mt-4 text-xs text-slate-500 text-center">💡 點擊任一股票名稱可查看「哪幾檔 ETF 持有 + 持股張數排行」</div>`;
+  <div class="mt-4 text-xs text-slate-500 text-center">💡 點擊任一股票名稱可查看「哪幾檔 ETF 持有 + 持股張數排行」 · 切換上方分頁可看 TOP ${TOP_N}</div>`;
 }
 
 function statCard(label, value, suffix, color) {
@@ -426,20 +481,25 @@ function miniFlow(rows, dir) {
     </div>`).join('') + '</div>';
 }
 
-function miniMV(rows, total) {
+function miniMV(rows, total, prevMvRank) {
   if (!rows.length) return '<div class="p-4 text-sm text-slate-500 text-center">無資料</div>';
-  return '<div class="divide-y divide-slate-800">' + rows.map((r,i) => `
+  return '<div class="divide-y divide-slate-800">' + rows.map((r,i) => {
+    const todayRank = i + 1;
+    const prevRank = prevMvRank[r.code] ?? null;
+    return `
     <div class="px-3 sm:px-4 py-2 flex items-center justify-between text-sm gap-2">
-      <div class="flex items-center gap-2 min-w-0 flex-1">
-        <span class="text-xs text-slate-500 w-5 sm:w-6 flex-shrink-0">${i+1}</span>
-        <span class="text-slate-300 truncate stock-link" onclick="openStockModal('${esc(r.code)}')">${esc(r.name)}</span>
+      <div class="flex items-center gap-1 min-w-0 flex-1">
+        <span class="text-xs text-slate-500 w-5 sm:w-6 flex-shrink-0">${todayRank}</span>
+        ${rankChangeHtml(todayRank, prevRank)}
+        <span class="text-slate-300 truncate stock-link ml-1" onclick="openStockModal('${esc(r.code)}')">${esc(r.name)}</span>
         <span class="text-xs text-slate-500 flex-shrink-0">${esc(r.code)}</span>
       </div>
       <span class="num text-amber-400 font-semibold flex-shrink-0">${fmtM(r.market_value)}</span>
-    </div>`).join('') + '</div>';
+    </div>`;
+  }).join('') + '</div>';
 }
 
-// ========== 買賣超 TOP 20 ==========
+// ========== 買賣超 TOP 30 ==========
 function renderFlowTable(rows, dir) {
   const color = dir === 'buy' ? 'emerald' : 'rose';
   const label = dir === 'buy' ? '買超' : '賣超';
@@ -492,29 +552,39 @@ function renderFlowTable(rows, dir) {
   </div>`;
 }
 
-// ========== 市值 TOP 20 ==========
-function renderMV(rows, total) {
+// ========== 市值 TOP 30 (含排名變化) ==========
+function renderMV(rows, total, prevMvRank) {
+  // 加上排名資訊
+  const rowsWithRank = rows.map((r, i) => ({
+    ...r,
+    today_rank: i + 1,
+    prev_rank: prevMvRank[r.code] ?? null,
+    rank_diff: prevMvRank[r.code] != null ? (prevMvRank[r.code] - (i + 1)) : null,
+  }));
+
   const keyMap = {
+    today_rank: (r) => r.today_rank,
     name: (r) => r.name,
     total_lots: (r) => r.total_lots,
     price: (r) => r.price,
     market_value: (r) => r.market_value,
     pct: (r) => r.market_value / total,
     etf_count: (r) => r.etf_count,
+    rank_diff: (r) => r.rank_diff == null ? -9999 : r.rank_diff, // NEW 排到底
   };
-  const sorted = sortRows(rows, mvSort, keyMap);
+  const sorted = sortRows(rowsWithRank, mvSort, keyMap);
   const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleMvSort('${key}')">${esc(label)}${sortIcon(mvSort, key)}</th>`;
 
   return `<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">合計市值 TOP ${TOP_N}</h2>
   <div class="text-xs sm:text-sm text-slate-400 mb-3">
     所有 ETF 合計市值:<span class="text-amber-400 font-semibold ml-2">${fmtM(total)}</span>
-    <div class="text-xs text-slate-500 mt-1">💡 點擊欄位標題排序 · 點擊最右邊 ETF 徽章查看持有 ETF</div>
+    <div class="text-xs text-slate-500 mt-1">💡 點擊欄位標題排序 · 排名旁箭頭 = 與前一日排名比較 (<span class="text-rose-400">↑</span>升 <span class="text-emerald-400">↓</span>降 <span class="text-amber-400">NEW</span>新進前${TOP_N})</div>
   </div>
   <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
     <table class="w-full text-sm">
       <thead class="bg-slate-800/50 text-slate-400 text-xs">
         <tr>
-          <th class="px-2 py-2 text-left">#</th>
+          ${th('排名', 'today_rank', 'left')}
           ${th('股票', 'name', 'left')}
           ${th('總張數', 'total_lots')}
           ${th('收盤價', 'price')}
@@ -524,8 +594,10 @@ function renderMV(rows, total) {
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
-        ${sorted.map((r,i) => `<tr class="hover:bg-slate-800/30">
-          <td class="px-2 py-2 text-slate-500">${i+1}</td>
+        ${sorted.map(r => `<tr class="hover:bg-slate-800/30">
+          <td class="px-2 py-2 whitespace-nowrap">
+            <span class="text-slate-300 font-semibold">${r.today_rank}</span>${rankChangeHtml(r.today_rank, r.prev_rank)}
+          </td>
           <td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal('${esc(r.code)}')">
             <div class="text-slate-200 stk-name">${esc(r.name)}</div>
             <div class="text-xs text-slate-500 stk-meta">${esc(r.code)}</div>
