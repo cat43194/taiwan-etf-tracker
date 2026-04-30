@@ -168,7 +168,15 @@ const fmtM = (n) => {
   if (Math.abs(n)>=1e4) return Math.round(n/1e4)+'萬';
   return fmt(n);
 };
-const esc = s => String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const esc = s => {
+  if (s == null) return '';
+  return String(s)
+    .split('&').join('&amp;')
+    .split('<').join('&lt;')
+    .split('>').join('&gt;')
+    .split('"').join('&quot;')
+    .split("'").join('&#39;');
+};
 
 // ========== 排名變化顯示 ==========
 // 採台股配色: 排名上升 = 紅色 (熱門/被買進), 排名下降 = 綠色 (退燒/被賣出)
