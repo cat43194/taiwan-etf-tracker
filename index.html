@@ -143,6 +143,10 @@ let multiSubTab = 'buy';
 let multiLoading = false;
 let multiSort = { key: null, dir: null };
 
+// 個股查詢的歷史日期 (null = 今日)
+let stockQueryDate = null;
+let stockQueryLoading = false;
+
 let mvSort = { key: null, dir: null };
 let etfSort = { key: null, dir: null };
 let flowSort = { buy: { key: null, dir: null }, sell: { key: null, dir: null } };
@@ -1019,6 +1023,57 @@ function bindEtf() {
   document.querySelectorAll('.etf-btn').forEach(function(btn) {
     btn.addEventListener('click', function() { selectedEtf = btn.dataset.etf; render(); });
   });
+}
+
+// 個股查詢: 日期切換相關
+async function setStockQueryDate(value) {
+  // 觸發歷史探測 (若尚未探測)
+  if (value && !HISTORY_DATES) {
+    stockQueryLoading = true;
+    render();
+    await discoverHistoryDates();
+    stockQueryLoading = false;
+  }
+  if (!value || value === '__today__') {
+    stockQueryDate = null;
+  } else {
+    // 把使用者選的日期對齊到最接近有快照的日期
+    stockQueryDate = HISTORY_DATES ? snapToHistoryDate(value) : value;
+  }
+  render();
+}
+
+async function ensureHistoryForStockQuery() {
+  if (HISTORY_DATES) return;
+  stockQueryLoading = true;
+  render();
+  await discoverHistoryDates();
+  stockQueryLoading = false;
+  render();
+}
+
+// 取得指定日期的 snapshot,以及該日的「前一個有快照日期」
+function getStockQuerySnap(targetDate) {
+  if (!targetDate) {
+    // 今日 = latest.json
+    return {
+      snap: { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date },
+      prevDate: DATA.prev_date,
+      prevSnap: DATA.prev ? { today: DATA.prev } : null,
+    };
+  }
+  // 指定日期
+  const snap = HISTORY_CACHE[targetDate];
+  if (!snap) return null;
+  // 找該日的前一個有快照日期
+  const idx = HISTORY_DATES.indexOf(targetDate);
+  let prevDate = null;
+  let prevSnap = null;
+  if (idx >= 0 && idx + 1 < HISTORY_DATES.length) {
+    prevDate = HISTORY_DATES[idx + 1];
+    prevSnap = HISTORY_CACHE[prevDate];
+  }
+  return { snap: snap, prevDate: prevDate, prevSnap: prevSnap };
 }
 
 function renderStock(todayAgg, prevAgg) {
