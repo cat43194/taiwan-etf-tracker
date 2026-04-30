@@ -1,4 +1,34 @@
-<!DOCTYPE html>
+async function discoverHistoryDates() {
+  if (HISTORY_DATES) return HISTORY_DATES;
+  if (!DATA || !DATA.today_date) return [];
+  const dates = [];
+  const todayStr = DATA.today_date;
+  // 用本地時間解析,避免 UTC 時區位移
+  const parts = todayStr.split('-');
+  const todayObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  dates.push(todayStr);
+  HISTORY_CACHE[todayStr] = { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date };
+
+  // 用本地時間格式化為 YYYY-MM-DD (避免 toISOString 的時區位移)
+  function formatLocalDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  const probes = [];
+  for (let i = 1; i <= 21; i++) {
+    const d = new Date(todayObj);
+    d.setDate(d.getDate() - i);
+    probes.push(formatLocalDate(d));
+  }
+
+  const results = await Promise.allSettled(
+    probes.map(function(ds) {
+      return fetch('./snapshots/snapshot-' + ds + '.json?t=' + Date.now())
+        .then(function(r) { return r.ok ? r.json().then(function(j) { return { ds: ds, j: j }; }) : null; })
+        .catch(<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -212,16 +242,25 @@ async function discoverHistoryDates() {
   if (!DATA || !DATA.today_date) return [];
   const dates = [];
   const todayStr = DATA.today_date;
-  const todayObj = new Date(todayStr + 'T00:00:00');
+  // 用本地時間解析 YYYY-MM-DD,避免 UTC 時區位移
+  const parts = todayStr.split('-');
+  const todayObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
   dates.push(todayStr);
   HISTORY_CACHE[todayStr] = { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date };
+
+  // 用本地時間格式化為 YYYY-MM-DD (絕對不用 toISOString,會有時區 bug)
+  function formatLocalDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
 
   const probes = [];
   for (let i = 1; i <= 21; i++) {
     const d = new Date(todayObj);
     d.setDate(d.getDate() - i);
-    const ds = d.toISOString().slice(0, 10);
-    probes.push(ds);
+    probes.push(formatLocalDate(d));
   }
 
   const results = await Promise.allSettled(
