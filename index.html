@@ -963,6 +963,18 @@ function renderMultiPeriodInfo() {
   </div>`;
 }區間 (起日 < 迄日)</div>`;
   }
+  // 計算包含起迄的交易日數
+  const startIdx = HISTORY_DATES.indexOf(startDate);
+  const endIdx = HISTORY_DATES.indexOf(endDate);
+  const tradingDays = (startIdx >= 0 && endIdx >= 0) ? Math.abs(startIdx - endIdx) + 1 : '?';
+  return `<div class="text-xs text-slate-400">
+    比較區間: <span class="text-slate-200">${esc(startDate)}</span>
+    <span class="text-slate-600">→</span>
+    <span class="text-slate-200">${esc(endDate)}</span>
+    <span class="text-slate-500 ml-2">(含起迄共 ${tradingDays} 個交易日,共 ${HISTORY_DATES.length} 天歷史可用)</span>
+  </div>`;
+}區間 (起日 < 迄日)</div>`;
+  }
   // 計算中間有幾個交易日
   const startIdx = HISTORY_DATES.indexOf(startDate);
   const endIdx = HISTORY_DATES.indexOf(endDate);
