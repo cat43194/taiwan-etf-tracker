@@ -73,6 +73,7 @@
     <button data-tab="overview" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">總覽</button>
     <button data-tab="buy" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">買超 TOP 20</button>
     <button data-tab="sell" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">賣超 TOP 20</button>
+    <button data-tab="multi" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">多期間買賣超</button>
     <button data-tab="mv" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">市值 TOP 50</button>
     <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
@@ -141,8 +142,19 @@ if (!checkAuth()) { /* 顯示登入頁 */ }
 const TOP_N_MV = 50;       // 市值頁顯示 50
 const TOP_N_FLOW = 20;     // 買超/賣超頁顯示 20
 const TOP_N_OVERVIEW = 20; // 總覽首頁全部顯示 20
+const MULTI_TOP_N = 20;    // 多期間買賣超 TOP 20
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
 let NEW_ETFS = [];
+
+// 多期間買賣超專用
+let HISTORY_DATES = null;       // 所有可用快照日期 [YYYY-MM-DD] (新到舊排序)
+let HISTORY_CACHE = {};         // 已載入的快照 cache: { 'YYYY-MM-DD': snapshot }
+let multiPreset = '1d';         // '1d' / '3d' / '5d' / 'custom'
+let multiStartDate = null;      // YYYY-MM-DD (custom 用)
+let multiEndDate = null;        // YYYY-MM-DD (custom 用)
+let multiSubTab = 'buy';        // 'buy' / 'sell'
+let multiLoading = false;
+let multiSort = { key: null, dir: null };
 
 let mvSort = { key: null, dir: null };
 let etfSort = { key: null, dir: null };
@@ -202,6 +214,123 @@ function sortIcon(sortState, key) {
 function toggleMvSort(key) { mvSort = cycleSort(mvSort, key); render(); }
 function toggleEtfSort(key) { etfSort = cycleSort(etfSort, key); render(); }
 function toggleFlowSort(dir, key) { flowSort[dir] = cycleSort(flowSort[dir], key); render(); }
+function toggleMultiSort(key) { multiSort = cycleSort(multiSort, key); render(); }
+
+// ========== 多期間買賣超: 歷史快照管理 ==========
+// 探測哪些日期有快照可用 (從 today_date 往前推, 最多探 14 個工作日)
+async function discoverHistoryDates() {
+  if (HISTORY_DATES) return HISTORY_DATES;
+  if (!DATA || !DATA.today_date) return [];
+
+  const dates = [];
+  const todayStr = DATA.today_date;
+  const todayObj = new Date(todayStr + 'T00:00:00');
+  // 加入今日(從 latest.json 已有)
+  dates.push(todayStr);
+  HISTORY_CACHE[todayStr] = { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date };
+
+  // 往前探測 21 個自然日 (足夠涵蓋 14 工作日)
+  const probes = [];
+  for (let i = 1; i <= 21; i++) {
+    const d = new Date(todayObj);
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    probes.push(ds);
+  }
+
+  // 平行 fetch (失敗 = 沒檔, 跳過)
+  const results = await Promise.allSettled(
+    probes.map(ds =>
+      fetch(`./snapshots/snapshot-${ds}.json?t=${Date.now()}`)
+        .then(r => r.ok ? r.json().then(j => ({ ds, j })) : null)
+        .catch(() => null)
+    )
+  );
+
+  results.forEach(r => {
+    if (r.status === 'fulfilled' && r.value) {
+      const { ds, j } = r.value;
+      dates.push(ds);
+      HISTORY_CACHE[ds] = j;
+    }
+  });
+
+  // 由新到舊排序
+  dates.sort((a, b) => b.localeCompare(a));
+  // 去重
+  HISTORY_DATES = [...new Set(dates)];
+  return HISTORY_DATES;
+}
+
+// 取「往前 N 個交易日」的起日 (N=1 表示昨日, N=3 表示 3 工作日前)
+function getStartDateByOffset(n) {
+  if (!HISTORY_DATES || HISTORY_DATES.length === 0) return null;
+  // HISTORY_DATES 已由新到舊排序, [0]=最新
+  if (n >= HISTORY_DATES.length) return HISTORY_DATES[HISTORY_DATES.length - 1]; // 最舊那個
+  return HISTORY_DATES[n];
+}
+
+// 計算兩天之間的買賣超 (end - start)
+function computeMultiFlow(startSnap, endSnap, prices) {
+  if (!startSnap || !endSnap) return [];
+  const startAgg = aggregate(startSnap.today || {}, prices);
+  const endAgg = aggregate(endSnap.today || {}, prices);
+
+  const keys = new Set([...Object.keys(startAgg), ...Object.keys(endAgg)]);
+  const flows = [];
+  keys.forEach(code => {
+    const s = startAgg[code], e = endAgg[code];
+    const start_lots = s ? s.total_lots : 0;
+    const end_lots = e ? e.total_lots : 0;
+    const diff = end_lots - start_lots;
+    const price = prices[code] ?? null;
+    const name = (e && e.name) || (s && s.name) || code;
+    const etf_count = e ? e.etf_count : 0;
+    flows.push({
+      code, name,
+      start_lots, end_lots, diff,
+      price,
+      diff_value: price ? diff * 1000 * price : null,
+      etf_count,
+      is_new: start_lots === 0 && end_lots > 0,         // 新進
+      is_cleared: start_lots > 0 && end_lots === 0,     // 出清
+    });
+  });
+  return flows;
+}
+
+async function changeMultiPreset(preset) {
+  multiPreset = preset;
+  multiSort = { key: null, dir: null };
+  if (preset !== 'custom') {
+    multiLoading = true;
+    render();
+    await discoverHistoryDates();
+    multiLoading = false;
+    render();
+  } else {
+    // 自選預設: 起日=最舊, 迄日=最新
+    if (!HISTORY_DATES) {
+      multiLoading = true;
+      render();
+      await discoverHistoryDates();
+      multiLoading = false;
+    }
+    if (HISTORY_DATES && HISTORY_DATES.length >= 2) {
+      multiEndDate = multiEndDate || HISTORY_DATES[0];
+      multiStartDate = multiStartDate || HISTORY_DATES[Math.min(HISTORY_DATES.length - 1, 5)];
+    }
+    render();
+  }
+}
+
+function setMultiCustomDate(which, value) {
+  if (which === 'start') multiStartDate = value;
+  else multiEndDate = value;
+  render();
+}
+
+function toggleMultiSubTab(tab) { multiSubTab = tab; render(); }
 
 // ========== 資料彙總 ==========
 function aggregate(snapshot, prices) {
@@ -432,6 +561,7 @@ function render() {
   if (currentTab === 'overview') main.innerHTML = renderOverview(todayAgg, buyOverview, sellOverview, mvOverview, prevMvRank);
   else if (currentTab === 'buy') main.innerHTML = renderFlowTable(buy, 'buy');
   else if (currentTab === 'sell') main.innerHTML = renderFlowTable(sell, 'sell');
+  else if (currentTab === 'multi') { main.innerHTML = renderMulti(); bindMulti(); }
   else if (currentTab === 'mv') main.innerHTML = renderMV(mv, Object.values(todayAgg).reduce((s,r)=>s+(r.market_value||0),0), prevMvRank);
   else if (currentTab === 'etf') { main.innerHTML = renderETF(); bindEtf(); }
   else if (currentTab === 'stock') { main.innerHTML = renderStock(todayAgg, prevAgg); bindStock(todayAgg, prevAgg); }
@@ -705,6 +835,191 @@ function bindEtf() {
   document.querySelectorAll('.etf-btn').forEach(btn => {
     btn.addEventListener('click', () => { selectedEtf = btn.dataset.etf; render(); });
   });
+}
+
+// ========== 多期間買賣超 ==========
+function renderMulti() {
+  // 第一次進來自動載入歷史
+  if (!HISTORY_DATES && !multiLoading) {
+    multiLoading = true;
+    discoverHistoryDates().then(() => { multiLoading = false; render(); });
+  }
+
+  const presetBtns = [
+    { key: '1d', label: '近 1 日' },
+    { key: '3d', label: '近 3 日' },
+    { key: '5d', label: '近 5 日' },
+    { key: 'custom', label: '自選日期' },
+  ];
+
+  const headerControls = `
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4 mb-4">
+      <div class="flex flex-wrap gap-2 mb-3">
+        ${presetBtns.map(b => {
+          const active = multiPreset === b.key;
+          const cls = active ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+          return `<button onclick="changeMultiPreset('${b.key}')" class="px-3 py-1.5 text-xs sm:text-sm rounded ${cls}">${esc(b.label)}</button>`;
+        }).join('')}
+      </div>
+      ${multiPreset === 'custom' ? renderCustomDatePicker() : ''}
+      ${renderMultiPeriodInfo()}
+    </div>`;
+
+  if (multiLoading) {
+    return headerControls + '<div class="text-center text-slate-400 py-12">載入歷史快照中...</div>';
+  }
+
+  if (!HISTORY_DATES || HISTORY_DATES.length < 2) {
+    return headerControls + `<div class="text-center text-rose-400 py-12">
+      ⚠️ 歷史快照不足 (僅 ${HISTORY_DATES?.length || 0} 天),無法計算期間變動。<br>
+      <span class="text-xs text-slate-500">需要至少 2 天的快照才能比較</span>
+    </div>`;
+  }
+
+  // 決定起迄日
+  const { startDate, endDate, validRange } = getMultiRange();
+  if (!validRange) {
+    return headerControls + `<div class="text-center text-amber-400 py-12">
+      ⚠️ 期間不足 (歷史只有 ${HISTORY_DATES.length} 天),請改選較短期間或自選日期
+    </div>`;
+  }
+
+  const startSnap = HISTORY_CACHE[startDate];
+  const endSnap = HISTORY_CACHE[endDate];
+  if (!startSnap || !endSnap) {
+    return headerControls + '<div class="text-center text-rose-400 py-12">⚠️ 無法載入該日期快照</div>';
+  }
+
+  // 用迄日的 prices
+  const prices = endSnap.prices || {};
+  const flows = computeMultiFlow(startSnap, endSnap, prices);
+  const buy = flows.filter(f => f.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, MULTI_TOP_N);
+  const sell = flows.filter(f => f.diff < 0).sort((a, b) => a.diff - b.diff).slice(0, MULTI_TOP_N);
+
+  return headerControls + `
+    <div class="flex gap-2 mb-3">
+      <button onclick="toggleMultiSubTab('buy')" class="px-4 py-1.5 text-sm rounded ${multiSubTab==='buy'?'bg-emerald-600 text-white':'bg-slate-800 text-slate-300 hover:bg-slate-700'}">📈 買超 TOP ${MULTI_TOP_N}</button>
+      <button onclick="toggleMultiSubTab('sell')" class="px-4 py-1.5 text-sm rounded ${multiSubTab==='sell'?'bg-rose-600 text-white':'bg-slate-800 text-slate-300 hover:bg-slate-700'}">📉 賣超 TOP ${MULTI_TOP_N}</button>
+    </div>
+    ${renderMultiTable(multiSubTab === 'buy' ? buy : sell, multiSubTab)}
+  `;
+}
+
+function renderCustomDatePicker() {
+  if (!HISTORY_DATES || HISTORY_DATES.length === 0) return '';
+  const optionsHtml = HISTORY_DATES.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  return `
+    <div class="flex flex-wrap items-center gap-2 mb-3 text-sm">
+      <span class="text-slate-400">起日:</span>
+      <select onchange="setMultiCustomDate('start', this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">
+        ${HISTORY_DATES.map(d => `<option value="${esc(d)}" ${d===multiStartDate?'selected':''}>${esc(d)}</option>`).join('')}
+      </select>
+      <span class="text-slate-400">迄日:</span>
+      <select onchange="setMultiCustomDate('end', this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">
+        ${HISTORY_DATES.map(d => `<option value="${esc(d)}" ${d===multiEndDate?'selected':''}>${esc(d)}</option>`).join('')}
+      </select>
+      <span class="text-xs text-slate-500">(可用 ${HISTORY_DATES.length} 天歷史)</span>
+    </div>
+  `;
+}
+
+function getMultiRange() {
+  if (!HISTORY_DATES || HISTORY_DATES.length < 2) {
+    return { validRange: false };
+  }
+  const endDate = HISTORY_DATES[0]; // 最新
+  let startDate;
+  if (multiPreset === '1d') startDate = HISTORY_DATES[1];
+  else if (multiPreset === '3d') startDate = getStartDateByOffset(3);
+  else if (multiPreset === '5d') startDate = getStartDateByOffset(5);
+  else if (multiPreset === 'custom') {
+    if (!multiStartDate || !multiEndDate) return { validRange: false };
+    if (multiStartDate >= multiEndDate) return { validRange: false };
+    return { startDate: multiStartDate, endDate: multiEndDate, validRange: true };
+  } else {
+    startDate = HISTORY_DATES[1];
+  }
+  if (!startDate || startDate === endDate) return { validRange: false };
+  return { startDate, endDate, validRange: true };
+}
+
+function renderMultiPeriodInfo() {
+  if (!HISTORY_DATES || HISTORY_DATES.length < 2) return '';
+  const { startDate, endDate, validRange } = getMultiRange();
+  if (!validRange) {
+    return `<div class="text-xs text-amber-400">⚠️ 請選擇有效的日期區間 (起日 < 迄日)</div>`;
+  }
+  // 計算中間有幾個交易日
+  const startIdx = HISTORY_DATES.indexOf(startDate);
+  const endIdx = HISTORY_DATES.indexOf(endDate);
+  const tradingDays = (startIdx >= 0 && endIdx >= 0) ? Math.abs(startIdx - endIdx) : '?';
+  return `<div class="text-xs text-slate-400">
+    比較區間: <span class="text-slate-200">${esc(startDate)}</span>
+    <span class="text-slate-600">→</span>
+    <span class="text-slate-200">${esc(endDate)}</span>
+    <span class="text-slate-500 ml-2">(${tradingDays} 個工作日,共 ${HISTORY_DATES.length} 天歷史可用)</span>
+  </div>`;
+}
+
+function renderMultiTable(rows, dir) {
+  if (!rows.length) {
+    return `<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500">
+      ${dir==='buy'?'此期間無 ETF 加碼超過 0 張的股票':'此期間無 ETF 減碼的股票'}
+    </div>`;
+  }
+  const color = dir === 'buy' ? 'emerald' : 'rose';
+  const label = dir === 'buy' ? '加碼' : '減碼';
+
+  const keyMap = {
+    name: (r) => r.name,
+    start_lots: (r) => r.start_lots,
+    end_lots: (r) => r.end_lots,
+    diff: (r) => r.diff,
+    diff_value: (r) => r.diff_value,
+  };
+  const sorted = sortRows(rows, multiSort, keyMap);
+  const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleMultiSort('${key}')">${esc(label)}${sortIcon(multiSort, key)}</th>`;
+
+  return `
+  <div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看持有 ETF · 點擊欄位標題排序</div>
+  <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-800/50 text-slate-400 text-xs">
+        <tr>
+          <th class="px-2 py-2 text-left">#</th>
+          ${th('股票', 'name', 'left')}
+          ${th('起日張', 'start_lots')}
+          ${th('迄日張', 'end_lots')}
+          ${th('${label}', 'diff')}
+          ${th('變動金額', 'diff_value')}
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        ${sorted.map((r, i) => {
+          const tag = r.is_new
+            ? '<span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 rounded ml-1">NEW</span>'
+            : r.is_cleared
+              ? '<span class="text-[10px] bg-slate-700 text-slate-300 px-1 rounded ml-1">出清</span>'
+              : '';
+          return `<tr class="hover:bg-slate-800/30">
+            <td class="px-2 py-2 text-slate-500">${i+1}</td>
+            <td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal('${esc(r.code)}')">
+              <div class="text-slate-200 stk-name">${esc(r.name)}${tag}</div>
+              <div class="text-xs text-slate-500 stk-meta">${esc(r.code)} · ${r.etf_count}檔</div>
+            </td>
+            <td class="px-2 py-2 text-right num text-slate-400">${fmt(r.start_lots)}</td>
+            <td class="px-2 py-2 text-right num">${fmt(r.end_lots)}</td>
+            <td class="px-2 py-2 text-right num font-semibold text-${color}-400">${r.diff>0?'+':''}${fmt(r.diff)}</td>
+            <td class="px-2 py-2 text-right num text-xs text-${color}-400 whitespace-nowrap">${r.diff_value!=null?(r.diff>0?'+':'')+fmtM(r.diff_value):'-'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function bindMulti() {
+  // 目前所有 onclick / onchange 都用 inline 處理,不需額外綁定
 }
 
 function renderStock(todayAgg, prevAgg) {
