@@ -1004,7 +1004,10 @@ function renderMultiTable(rows, dir) {
     diff_value: (r) => r.diff_value,
   };
   const sorted = sortRows(rows, multiSort, keyMap);
-  const th = (label, key, align='right') => `<th class="px-2 py-2 text-${align} sort-th" onclick="toggleMultiSort('${key}')">${esc(label)}${sortIcon(multiSort, key)}</th>`;
+  const thh = (lab, key, align) => {
+    const a = align || 'right';
+    return `<th class="px-2 py-2 text-${a} sort-th" onclick="toggleMultiSort('${key}')">${esc(lab)}${sortIcon(multiSort, key)}</th>`;
+  };
 
   return `
   <div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看持有 ETF · 點擊欄位標題排序</div>
@@ -1013,11 +1016,11 @@ function renderMultiTable(rows, dir) {
       <thead class="bg-slate-800/50 text-slate-400 text-xs">
         <tr>
           <th class="px-2 py-2 text-left">#</th>
-          ${th('股票', 'name', 'left')}
-          ${th('起日張', 'start_lots')}
-          ${th('迄日張', 'end_lots')}
-          ${th(label, 'diff')}
-          ${th('變動金額', 'diff_value')}
+          ${thh('股票', 'name', 'left')}
+          ${thh('起日張', 'start_lots')}
+          ${thh('迄日張', 'end_lots')}
+          ${thh(label, 'diff')}
+          ${thh('變動金額', 'diff_value')}
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
