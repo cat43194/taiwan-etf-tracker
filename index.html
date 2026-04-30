@@ -247,9 +247,20 @@ async function discoverHistoryDates() {
 }
 
 function getStartDateByOffset(n) {
+  // 從最新日期往前數 n 個「有快照」的日期 (n=1 = 昨日, n=2 = 前天, ...)
   if (!HISTORY_DATES || HISTORY_DATES.length === 0) return null;
   if (n >= HISTORY_DATES.length) return HISTORY_DATES[HISTORY_DATES.length - 1];
   return HISTORY_DATES[n];
+}
+
+// 把任意日期 (YYYY-MM-DD) 對齊到「最接近且不晚於該日的有快照日期」
+function snapToHistoryDate(targetDate) {
+  if (!HISTORY_DATES || HISTORY_DATES.length === 0) return null;
+  // HISTORY_DATES 由新到舊排序
+  for (let i = 0; i < HISTORY_DATES.length; i++) {
+    if (HISTORY_DATES[i] <= targetDate) return HISTORY_DATES[i];
+  }
+  return HISTORY_DATES[HISTORY_DATES.length - 1];
 }
 
 function computeMultiFlow(startSnap, endSnap, prices) {
@@ -786,20 +797,30 @@ function renderMulti() {
 
 function renderCustomDatePicker() {
   if (!HISTORY_DATES || HISTORY_DATES.length === 0) return '';
-  let startOpts = '';
-  let endOpts = '';
-  HISTORY_DATES.forEach(function(d) {
-    const sSel = d === multiStartDate ? 'selected' : '';
-    const eSel = d === multiEndDate ? 'selected' : '';
-    startOpts += '<option value="' + esc(d) + '" ' + sSel + '>' + esc(d) + '</option>';
-    endOpts += '<option value="' + esc(d) + '" ' + eSel + '>' + esc(d) + '</option>';
-  });
+  // HISTORY_DATES 由新到舊, 第一個是最新, 最後一個是最舊
+  const minDate = HISTORY_DATES[HISTORY_DATES.length - 1];
+  const maxDate = HISTORY_DATES[0];
+  const startVal = multiStartDate || minDate;
+  const endVal = multiEndDate || maxDate;
+
+  // 顯示 snap 後的實際比較日 (若使用者選到沒快照的日期)
+  const snappedStart = snapToHistoryDate(startVal);
+  const snappedEnd = snapToHistoryDate(endVal);
+  const startNote = (snappedStart && snappedStart !== startVal) ? ' <span class="text-amber-400">→ 對齊至 ' + esc(snappedStart) + '</span>' : '';
+  const endNote = (snappedEnd && snappedEnd !== endVal) ? ' <span class="text-amber-400">→ 對齊至 ' + esc(snappedEnd) + '</span>' : '';
+
   return '<div class="flex flex-wrap items-center gap-2 mb-3 text-sm">'
-    + '<span class="text-slate-400">起日:</span>'
-    + '<select onchange="setMultiCustomDate(\'start\', this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + startOpts + '</select>'
-    + '<span class="text-slate-400">迄日:</span>'
-    + '<select onchange="setMultiCustomDate(\'end\', this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + endOpts + '</select>'
-    + '<span class="text-xs text-slate-500">(可用 ' + HISTORY_DATES.length + ' 天歷史)</span>'
+    + '<label class="text-slate-400">起日:</label>'
+    + '<input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(startVal) + '" '
+    + 'onchange="setMultiCustomDate(\'start\', this.value)" '
+    + 'class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">'
+    + startNote
+    + '<label class="text-slate-400 ml-2">迄日:</label>'
+    + '<input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(endVal) + '" '
+    + 'onchange="setMultiCustomDate(\'end\', this.value)" '
+    + 'class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">'
+    + endNote
+    + '<span class="text-xs text-slate-500 ml-2">(可用 ' + HISTORY_DATES.length + ' 天歷史: ' + esc(minDate) + ' ~ ' + esc(maxDate) + ')</span>'
     + '</div>';
 }
 
@@ -807,15 +828,21 @@ function getMultiRange() {
   if (!HISTORY_DATES || HISTORY_DATES.length < 2) return { validRange: false };
   const endDate = HISTORY_DATES[0];
   let startDate;
-  if (multiPreset === '2d') startDate = HISTORY_DATES[1];
-  else if (multiPreset === '3d') startDate = getStartDateByOffset(2);
-  else if (multiPreset === '5d') startDate = getStartDateByOffset(4);
+  // 業界定義: 「近 N 日」= 包含今日的 N 個交易日
+  // 起日 = 今日往前 N-1 個有快照的日期 = HISTORY_DATES[N-1]
+  if (multiPreset === '2d') startDate = getStartDateByOffset(1);   // 包含今日 + 1 天前 = 2 個交易日
+  else if (multiPreset === '3d') startDate = getStartDateByOffset(2);   // 包含今日 + 2 天前 = 3 個交易日
+  else if (multiPreset === '5d') startDate = getStartDateByOffset(4);   // 包含今日 + 4 天前 = 5 個交易日
   else if (multiPreset === 'custom') {
     if (!multiStartDate || !multiEndDate) return { validRange: false };
     if (multiStartDate >= multiEndDate) return { validRange: false };
-    return { startDate: multiStartDate, endDate: multiEndDate, validRange: true };
+    // 把使用者選的日期對齊到最接近的有快照日期
+    const snappedStart = snapToHistoryDate(multiStartDate);
+    const snappedEnd = snapToHistoryDate(multiEndDate);
+    if (!snappedStart || !snappedEnd || snappedStart >= snappedEnd) return { validRange: false };
+    return { startDate: snappedStart, endDate: snappedEnd, validRange: true };
   } else {
-    startDate = HISTORY_DATES[1];
+    startDate = getStartDateByOffset(1);
   }
   if (!startDate || startDate === endDate) return { validRange: false };
   return { startDate: startDate, endDate: endDate, validRange: true };
