@@ -1,34 +1,4 @@
-async function discoverHistoryDates() {
-  if (HISTORY_DATES) return HISTORY_DATES;
-  if (!DATA || !DATA.today_date) return [];
-  const dates = [];
-  const todayStr = DATA.today_date;
-  // 用本地時間解析,避免 UTC 時區位移
-  const parts = todayStr.split('-');
-  const todayObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-  dates.push(todayStr);
-  HISTORY_CACHE[todayStr] = { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date };
-
-  // 用本地時間格式化為 YYYY-MM-DD (避免 toISOString 的時區位移)
-  function formatLocalDate(d) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return y + '-' + m + '-' + day;
-  }
-
-  const probes = [];
-  for (let i = 1; i <= 21; i++) {
-    const d = new Date(todayObj);
-    d.setDate(d.getDate() - i);
-    probes.push(formatLocalDate(d));
-  }
-
-  const results = await Promise.allSettled(
-    probes.map(function(ds) {
-      return fetch('./snapshots/snapshot-' + ds + '.json?t=' + Date.now())
-        .then(function(r) { return r.ok ? r.json().then(function(j) { return { ds: ds, j: j }; }) : null; })
-        .catch(<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
@@ -242,13 +212,11 @@ async function discoverHistoryDates() {
   if (!DATA || !DATA.today_date) return [];
   const dates = [];
   const todayStr = DATA.today_date;
-  // 用本地時間解析 YYYY-MM-DD,避免 UTC 時區位移
   const parts = todayStr.split('-');
   const todayObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
   dates.push(todayStr);
   HISTORY_CACHE[todayStr] = { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date };
 
-  // 用本地時間格式化為 YYYY-MM-DD (絕對不用 toISOString,會有時區 bug)
   function formatLocalDate(d) {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -286,16 +254,13 @@ async function discoverHistoryDates() {
 }
 
 function getStartDateByOffset(n) {
-  // 從最新日期往前數 n 個「有快照」的日期 (n=1 = 昨日, n=2 = 前天, ...)
   if (!HISTORY_DATES || HISTORY_DATES.length === 0) return null;
   if (n >= HISTORY_DATES.length) return HISTORY_DATES[HISTORY_DATES.length - 1];
   return HISTORY_DATES[n];
 }
 
-// 把任意日期 (YYYY-MM-DD) 對齊到「最接近且不晚於該日的有快照日期」
 function snapToHistoryDate(targetDate) {
   if (!HISTORY_DATES || HISTORY_DATES.length === 0) return null;
-  // HISTORY_DATES 由新到舊排序
   for (let i = 0; i < HISTORY_DATES.length; i++) {
     if (HISTORY_DATES[i] <= targetDate) return HISTORY_DATES[i];
   }
@@ -836,13 +801,10 @@ function renderMulti() {
 
 function renderCustomDatePicker() {
   if (!HISTORY_DATES || HISTORY_DATES.length === 0) return '';
-  // HISTORY_DATES 由新到舊, 第一個是最新, 最後一個是最舊
   const minDate = HISTORY_DATES[HISTORY_DATES.length - 1];
   const maxDate = HISTORY_DATES[0];
   const startVal = multiStartDate || minDate;
   const endVal = multiEndDate || maxDate;
-
-  // 顯示 snap 後的實際比較日 (若使用者選到沒快照的日期)
   const snappedStart = snapToHistoryDate(startVal);
   const snappedEnd = snapToHistoryDate(endVal);
   const startNote = (snappedStart && snappedStart !== startVal) ? ' <span class="text-amber-400">→ 對齊至 ' + esc(snappedStart) + '</span>' : '';
@@ -867,15 +829,12 @@ function getMultiRange() {
   if (!HISTORY_DATES || HISTORY_DATES.length < 2) return { validRange: false };
   const endDate = HISTORY_DATES[0];
   let startDate;
-  // 業界定義: 「近 N 日」= 包含今日的 N 個交易日
-  // 起日 = 今日往前 N-1 個有快照的日期 = HISTORY_DATES[N-1]
-  if (multiPreset === '2d') startDate = getStartDateByOffset(1);   // 包含今日 + 1 天前 = 2 個交易日
-  else if (multiPreset === '3d') startDate = getStartDateByOffset(2);   // 包含今日 + 2 天前 = 3 個交易日
-  else if (multiPreset === '5d') startDate = getStartDateByOffset(4);   // 包含今日 + 4 天前 = 5 個交易日
+  if (multiPreset === '2d') startDate = getStartDateByOffset(1);
+  else if (multiPreset === '3d') startDate = getStartDateByOffset(2);
+  else if (multiPreset === '5d') startDate = getStartDateByOffset(4);
   else if (multiPreset === 'custom') {
     if (!multiStartDate || !multiEndDate) return { validRange: false };
     if (multiStartDate >= multiEndDate) return { validRange: false };
-    // 把使用者選的日期對齊到最接近的有快照日期
     const snappedStart = snapToHistoryDate(multiStartDate);
     const snappedEnd = snapToHistoryDate(multiEndDate);
     if (!snappedStart || !snappedEnd || snappedStart >= snappedEnd) return { validRange: false };
