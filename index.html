@@ -147,9 +147,15 @@ let stockQueryDate = null;
 let stockQueryLoading = false;
 
 // 單一 ETF 對單一股票的歷史 modal 用
-let historyModalEtf = null;     // ETF code, e.g. '00981A'
-let historyModalStock = null;   // stock code, e.g. '2330'
+let historyModalEtf = null;
+let historyModalStock = null;
 let historyModalLoading = false;
+
+// 個股 modal 的 tab 狀態 ('holdings' = 今日持有, 'history' = 歷史趨勢)
+let stockModalTab = 'holdings';
+// 歷史趨勢分頁的 ETF 篩選 (null = 全部合計, 或 ETF code)
+let stockModalHistoryEtf = null;
+let stockModalHistoryLoading = false;
 
 let mvSort = { key: null, dir: null };
 let etfSort = { key: null, dir: null };
@@ -451,11 +457,33 @@ function computeFlows(todaySnap, prevSnap, prices, newEtfs) {
   return flows;
 }
 
-function openStockModal(code) { modalStock = code; renderModal(); }
+function openStockModal(code) {
+  modalStock = code;
+  stockModalTab = 'holdings';
+  stockModalHistoryEtf = null;
+  renderModal();
+}
 function closeStockModal() {
   modalStock = null;
+  stockModalTab = 'holdings';
   document.getElementById('stock-modal').classList.add('hidden');
   document.getElementById('stock-modal').classList.remove('flex');
+}
+
+async function setStockModalTab(tab) {
+  stockModalTab = tab;
+  if (tab === 'history' && !HISTORY_DATES) {
+    stockModalHistoryLoading = true;
+    renderModal();
+    await discoverHistoryDates();
+    stockModalHistoryLoading = false;
+  }
+  renderModal();
+}
+
+function setStockModalHistoryEtf(etfCode) {
+  stockModalHistoryEtf = etfCode === '__all__' ? null : etfCode;
+  renderModal();
 }
 
 // 開啟「ETF × 股票」歷史 modal
@@ -502,7 +530,40 @@ function getEtfStockHistory(etfCode, stockCode) {
       stockName: holding ? holding.name : null,
     });
   });
-  return series; // 已經是新到舊排序 (因為 HISTORY_DATES 是新到舊)
+  return series;
+}
+
+// 取出「所有 ETF 合計」對單一股票的歷史時間序列
+function getStockTotalHistory(stockCode) {
+  if (!HISTORY_DATES) return [];
+  const series = [];
+  HISTORY_DATES.forEach(function(date) {
+    const snap = HISTORY_CACHE[date];
+    if (!snap || !snap.today) return;
+    let totalLots = 0;
+    let etfCount = 0;
+    let stockName = null;
+    Object.values(snap.today).forEach(function(etfData) {
+      const holding = (etfData.holdings || []).find(function(h) { return h.code === stockCode; });
+      if (holding && holding.lots > 0) {
+        totalLots += holding.lots;
+        etfCount += 1;
+        if (!stockName) stockName = holding.name;
+      }
+    });
+    const price = (snap.prices && snap.prices[stockCode]) || null;
+    const mv = price ? totalLots * 1000 * price : null;
+    series.push({
+      date: date,
+      lots: totalLots,
+      price: price,
+      mv: mv,
+      etf_count: etfCount,
+      held: totalLots > 0,
+      stockName: stockName,
+    });
+  });
+  return series;
 }
 
 function renderModal() {
@@ -518,7 +579,54 @@ function renderModal() {
   const prev = aggregate(DATA.prev || {}, DATA.prices || {})[modalStock];
   const prevLots = prev ? prev.total_lots : 0;
   const diff = stock.total_lots - prevLots;
+  const diffSpanColor = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-rose-400' : 'text-slate-500');
+  const diffSpanText = diff !== 0 ? (diff > 0 ? '▲ +' : '▼ ') + fmt(Math.abs(diff)) : '— 持平';
 
+  // === 標題區 ===
+  const headerHtml = ''
+    + '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2">'
+    + '<div class="min-w-0">'
+    + '<div class="flex items-baseline gap-2 flex-wrap">'
+    + '<span class="font-bold text-lg sm:text-xl">' + esc(stock.name) + '</span>'
+    + '<span class="text-xs sm:text-sm text-slate-400">' + esc(stock.code) + '</span>'
+    + '</div>'
+    + '<div class="text-xs text-slate-400 mt-1 leading-relaxed">'
+    + '合計 <span class="text-slate-200 font-semibold">' + fmt(stock.total_lots) + '</span> 張'
+    + ' · <span class="text-amber-400">' + stock.etf_count + '</span> 檔 ETF 持有'
+    + ' · 收盤 ' + (stock.price ? fmt(stock.price, 2) : 'N/A')
+    + ' · 市值 <span class="text-amber-400">' + fmtM(stock.market_value) + '</span>'
+    + '</div>'
+    + '<div class="text-xs mt-1">'
+    + '<span class="text-slate-500">前日合計:</span>'
+    + ' <span class="num">' + fmt(prevLots) + '</span> 張'
+    + ' <span class="ml-2 font-semibold ' + diffSpanColor + '">' + diffSpanText + ' 張</span>'
+    + '</div>'
+    + '</div>'
+    + '<button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button>'
+    + '</div>';
+
+  // === Tab 切換列 ===
+  const tabHtml = '<div class="flex gap-1 px-3 sm:px-4 pt-2 border-b border-slate-700 bg-slate-900/50">'
+    + '<button onclick="setStockModalTab(\'holdings\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'holdings' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📋 今日持有</button>'
+    + '<button onclick="setStockModalTab(\'history\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'history' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📈 歷史趨勢</button>'
+    + '</div>';
+
+  // === Body 區: 依據 tab 切換 ===
+  let bodyHtml = '';
+  if (stockModalTab === 'holdings') {
+    bodyHtml = renderModalHoldings(stock, etfs);
+  } else {
+    bodyHtml = renderModalHistory(stock);
+  }
+
+  content.innerHTML = headerHtml + tabHtml + bodyHtml
+    + '<div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>';
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+// Tab 1: 今日持有 (原本的內容,搬出來方便維護)
+function renderModalHoldings(stock, etfs) {
   let etfRowsHtml = '';
   etfs.forEach(function(e, i) {
     const isNew = NEW_ETFS.indexOf(e.etf) !== -1;
@@ -539,31 +647,7 @@ function renderModal() {
       + '</tr>';
   });
 
-  const diffSpanColor = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-rose-400' : 'text-slate-500');
-  const diffSpanText = diff !== 0 ? (diff > 0 ? '▲ +' : '▼ ') + fmt(Math.abs(diff)) : '— 持平';
-
-  content.innerHTML = ''
-    + '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2">'
-    + '<div class="min-w-0">'
-    + '<div class="flex items-baseline gap-2 flex-wrap">'
-    + '<span class="font-bold text-lg sm:text-xl">' + esc(stock.name) + '</span>'
-    + '<span class="text-xs sm:text-sm text-slate-400">' + esc(stock.code) + '</span>'
-    + '</div>'
-    + '<div class="text-xs text-slate-400 mt-1 leading-relaxed">'
-    + '合計 <span class="text-slate-200 font-semibold">' + fmt(stock.total_lots) + '</span> 張'
-    + ' · <span class="text-amber-400">' + stock.etf_count + '</span> 檔 ETF 持有'
-    + ' · 收盤 ' + (stock.price ? fmt(stock.price, 2) : 'N/A')
-    + ' · 市值 <span class="text-amber-400">' + fmtM(stock.market_value) + '</span>'
-    + '</div>'
-    + '<div class="text-xs mt-1">'
-    + '<span class="text-slate-500">前日合計:</span>'
-    + ' <span class="num">' + fmt(prevLots) + '</span> 張'
-    + ' <span class="ml-2 font-semibold ' + diffSpanColor + '">' + diffSpanText + ' 張</span>'
-    + '</div>'
-    + '</div>'
-    + '<button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button>'
-    + '</div>'
-    + '<div class="overflow-y-auto flex-1">'
+  return '<div class="overflow-y-auto flex-1">'
     + '<table class="w-full text-sm">'
     + '<thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0">'
     + '<tr>'
@@ -575,10 +659,119 @@ function renderModal() {
     + '</tr></thead>'
     + '<tbody class="divide-y divide-slate-800">' + etfRowsHtml + '</tbody>'
     + '</table>'
-    + '</div>'
-    + '<div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>';
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
+    + '</div>';
+}
+
+// Tab 2: 歷史趨勢
+function renderModalHistory(stock) {
+  if (stockModalHistoryLoading) {
+    return '<div class="p-8 text-center text-slate-400 flex-1">載入歷史快照中...</div>';
+  }
+  if (!HISTORY_DATES || HISTORY_DATES.length === 0) {
+    return '<div class="p-8 text-center text-rose-400 flex-1">⚠️ 無歷史資料</div>';
+  }
+
+  // ETF 篩選下拉選單
+  // 全部 ETF 按 code 排序
+  const allEtfCodes = Object.keys(DATA.today).sort();
+  let etfOptions = '<option value="__all__">全部 ETF 合計</option>';
+  allEtfCodes.forEach(function(k) {
+    const sel = stockModalHistoryEtf === k ? 'selected' : '';
+    const etfName = (DATA.today[k] && DATA.today[k].name) || k;
+    etfOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(etfName) + '</option>';
+  });
+  const filterHtml = '<div class="px-3 sm:px-4 py-3 border-b border-slate-800 flex flex-wrap items-center gap-2 text-xs sm:text-sm bg-slate-900/30">'
+    + '<span class="text-slate-400">📊 看哪個 ETF:</span>'
+    + '<select onchange="setStockModalHistoryEtf(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs sm:text-sm flex-1 max-w-md">' + etfOptions + '</select>'
+    + '</div>';
+
+  // 取得時間序列
+  const series = stockModalHistoryEtf
+    ? getEtfStockHistory(stockModalHistoryEtf, stock.code)
+    : getStockTotalHistory(stock.code);
+
+  if (!series.length) {
+    return filterHtml + '<div class="p-8 text-center text-slate-500 flex-1">期間內無持股資料</div>';
+  }
+
+  // 計算每筆變動
+  const seriesWithDiff = series.map(function(s, i) {
+    const prevS = series[i + 1]; // 下一筆是比較舊的
+    const diff = prevS ? (s.lots - prevS.lots) : null;
+    return Object.assign({}, s, { diff: diff });
+  });
+
+  // 統計
+  const heldDays = series.filter(function(s) { return s.held; });
+  const maxLots = heldDays.length > 0 ? Math.max.apply(null, heldDays.map(function(s) { return s.lots; })) : 0;
+  const minLots = heldDays.length > 0 ? Math.min.apply(null, heldDays.map(function(s) { return s.lots; })) : 0;
+  const firstLots = series.length > 0 ? series[series.length - 1].lots : 0;
+  const lastLots = series.length > 0 ? series[0].lots : 0;
+  const totalDiff = lastLots - firstLots;
+  const totalDiffColor = totalDiff > 0 ? 'text-emerald-400' : (totalDiff < 0 ? 'text-rose-400' : 'text-slate-400');
+
+  // 顯示誰的視角
+  const viewLabel = stockModalHistoryEtf
+    ? '單一 ETF 視角: <span class="text-amber-400 font-semibold">' + esc(stockModalHistoryEtf) + ' ' + esc((DATA.today[stockModalHistoryEtf] && DATA.today[stockModalHistoryEtf].name) || '') + '</span>'
+    : '全部 ETF 合計視角';
+
+  const statsHtml = '<div class="px-3 sm:px-4 py-2 text-xs text-slate-400 bg-slate-900/30 border-b border-slate-800">'
+    + viewLabel + '<br>'
+    + '期間: ' + esc(series[series.length - 1].date) + ' ~ ' + esc(series[0].date) + ' (' + series.length + ' 個交易日) · '
+    + '期間總變動: <span class="font-semibold ' + totalDiffColor + '">' + (totalDiff > 0 ? '+' : '') + fmt(totalDiff) + ' 張</span>'
+    + (heldDays.length > 0 ? ' · 區間 ' + fmt(minLots) + ' ~ ' + fmt(maxLots) + ' 張' : '')
+    + '</div>';
+
+  // 表格內容
+  let rowsHtml = '';
+  seriesWithDiff.forEach(function(s) {
+    const d = s.diff;
+    const dColor = d == null ? 'text-slate-600' : (d > 0 ? 'text-emerald-400' : (d < 0 ? 'text-rose-400' : 'text-slate-500'));
+    const dText = d == null ? '—' : (d !== 0 ? (d > 0 ? '+' : '') + fmt(d) : '—');
+    const lotsCell = s.held
+      ? '<span class="text-slate-100 font-semibold num">' + fmt(s.lots) + '</span>'
+      : '<span class="text-slate-600">未持有</span>';
+    const priceCell = s.price ? fmt(s.price, 2) : '—';
+    const mvCell = s.mv != null ? fmtM(s.mv) : '—';
+    // 只在「全部合計」視角顯示 ETF 數量
+    const etfCountCell = stockModalHistoryEtf ? null : (s.etf_count != null ? s.etf_count + '檔' : '—');
+    const weightCell = stockModalHistoryEtf ? (s.weight != null ? s.weight + '%' : '—') : null;
+
+    rowsHtml += '<tr class="hover:bg-slate-800/30">'
+      + '<td class="px-2 sm:px-3 py-2 text-slate-300 num">' + esc(s.date) + '</td>'
+      + '<td class="px-2 sm:px-3 py-2 text-right">' + lotsCell + '</td>';
+    if (etfCountCell !== null) {
+      rowsHtml += '<td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + etfCountCell + '</td>';
+    }
+    if (weightCell !== null) {
+      rowsHtml += '<td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + weightCell + '</td>';
+    }
+    rowsHtml += '<td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + priceCell + '</td>'
+      + '<td class="px-2 sm:px-3 py-2 text-right num text-amber-400 whitespace-nowrap">' + mvCell + '</td>'
+      + '<td class="px-2 sm:px-3 py-2 text-right num font-semibold ' + dColor + ' whitespace-nowrap">' + dText + '</td>'
+      + '</tr>';
+  });
+
+  // 表頭
+  let headerCols = '<th class="px-2 sm:px-3 py-2 text-left">日期</th>'
+    + '<th class="px-2 sm:px-3 py-2 text-right">張數</th>';
+  if (!stockModalHistoryEtf) {
+    headerCols += '<th class="px-2 sm:px-3 py-2 text-right">ETF 數</th>';
+  } else {
+    headerCols += '<th class="px-2 sm:px-3 py-2 text-right">比例</th>';
+  }
+  headerCols += '<th class="px-2 sm:px-3 py-2 text-right">收盤</th>'
+    + '<th class="px-2 sm:px-3 py-2 text-right">市值</th>'
+    + '<th class="px-2 sm:px-3 py-2 text-right">較前日</th>';
+
+  return filterHtml + statsHtml
+    + '<div class="overflow-y-auto flex-1">'
+    + '<table class="w-full text-sm">'
+    + '<thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0">'
+    + '<tr>' + headerCols + '</tr></thead>'
+    + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
+    + '</table>'
+    + '</div>';
 }
 
 document.getElementById('stock-modal').addEventListener('click', function(e) {
