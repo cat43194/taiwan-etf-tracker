@@ -145,6 +145,8 @@ let multiSort = { key: null, dir: null };
 
 let stockQueryDate = null;
 let stockQueryLoading = false;
+// 個股查詢的 ETF 視角篩選 (null = 全部 ETF 合計)
+let stockQueryEtfFilter = null;
 
 // 單一 ETF 對單一股票的歷史 modal 用
 let historyModalEtf = null;
@@ -361,6 +363,11 @@ async function ensureHistoryForStockQuery() {
   render();
   await discoverHistoryDates();
   stockQueryLoading = false;
+  render();
+}
+
+function setStockQueryEtfFilter(etfCode) {
+  stockQueryEtfFilter = etfCode === '__all__' ? null : etfCode;
   render();
 }
 
@@ -1435,11 +1442,6 @@ function bindEtf() {
 }
 
 function renderStock(todayAgg, prevAgg) {
-  const all = Object.values(todayAgg);
-  const filtered = stockSearch.trim()
-    ? all.filter(function(s) { return s.code.indexOf(stockSearch) !== -1 || s.name.indexOf(stockSearch) !== -1; })
-    : all.sort(function(a, b) { return b.total_lots - a.total_lots; }).slice(0, 30);
-
   // 日期切換器
   let dateSelectorHtml = '';
   if (HISTORY_DATES && HISTORY_DATES.length > 0) {
@@ -1447,7 +1449,7 @@ function renderStock(todayAgg, prevAgg) {
     const maxDate = HISTORY_DATES[0];
     const isToday = !stockQueryDate;
     const inputVal = stockQueryDate || maxDate;
-    dateSelectorHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-3 flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
+    dateSelectorHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
       + '<span class="text-slate-400">📅 查詢日期:</span>'
       + '<button onclick="setStockQueryDate(\'__today__\')" class="px-2 py-1 rounded ' + (isToday ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">最新</button>'
       + '<input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(inputVal) + '" '
@@ -1457,30 +1459,70 @@ function renderStock(todayAgg, prevAgg) {
       + '<span class="text-xs text-slate-500 ml-auto">可用 ' + HISTORY_DATES.length + ' 天歷史</span>'
       + '</div>';
   } else {
-    dateSelectorHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-3 flex items-center gap-2 text-xs sm:text-sm">'
+    dateSelectorHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-2 flex items-center gap-2 text-xs sm:text-sm">'
       + '<span class="text-slate-400">📅 想查歷史日期? </span>'
       + '<button onclick="ensureHistoryForStockQuery()" class="px-2 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white">' + (stockQueryLoading ? '載入中...' : '載入歷史') + '</button>'
       + '<span class="text-slate-500">(顯示最新資料 ' + esc(DATA.today_date) + ')</span>'
       + '</div>';
   }
 
+  // === 取得查詢日資料 (今日 or 歷史) ===
   const queryData = getStockQuerySnap(stockQueryDate);
-  let queryTodayAgg, queryPrevAgg, queryDateLabel, queryPrevLabel;
+  let querySnapshot, queryPrices, queryDateLabel, queryPrevSnapshot, queryPrevLabel;
   if (queryData) {
-    const queryPrices = queryData.snap.prices || {};
-    queryTodayAgg = aggregate(queryData.snap.today || {}, queryPrices);
-    queryPrevAgg = queryData.prevSnap ? aggregate(queryData.prevSnap.today || {}, queryPrices) : {};
+    querySnapshot = queryData.snap.today || {};
+    queryPrices = queryData.snap.prices || {};
     queryDateLabel = stockQueryDate || DATA.today_date;
+    queryPrevSnapshot = (queryData.prevSnap && queryData.prevSnap.today) || {};
     queryPrevLabel = queryData.prevDate;
   } else {
-    queryTodayAgg = todayAgg;
-    queryPrevAgg = prevAgg;
+    querySnapshot = DATA.today || {};
+    queryPrices = DATA.prices || {};
     queryDateLabel = DATA.today_date;
+    queryPrevSnapshot = DATA.prev || {};
     queryPrevLabel = DATA.prev_date;
   }
 
-  const detail = selectedStock && queryTodayAgg[selectedStock];
-  const prevDetail = selectedStock && queryPrevAgg[selectedStock];
+  // === ETF 視角篩選器 ===
+  // 篩選後的 snapshot (只包含選定 ETF 的資料)
+  let filteredSnapshot = querySnapshot;
+  let filteredPrevSnapshot = queryPrevSnapshot;
+  if (stockQueryEtfFilter) {
+    filteredSnapshot = {};
+    if (querySnapshot[stockQueryEtfFilter]) {
+      filteredSnapshot[stockQueryEtfFilter] = querySnapshot[stockQueryEtfFilter];
+    }
+    filteredPrevSnapshot = {};
+    if (queryPrevSnapshot[stockQueryEtfFilter]) {
+      filteredPrevSnapshot[stockQueryEtfFilter] = queryPrevSnapshot[stockQueryEtfFilter];
+    }
+  }
+
+  // ETF 視角下拉選單
+  const allEtfCodes = Object.keys(DATA.today).sort();
+  let etfFilterOptions = '<option value="__all__">全部 ETF 合計</option>';
+  allEtfCodes.forEach(function(k) {
+    const sel = stockQueryEtfFilter === k ? 'selected' : '';
+    const etfName = (DATA.today[k] && DATA.today[k].name) || k;
+    etfFilterOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(etfName) + '</option>';
+  });
+  const etfFilterHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-3 flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
+    + '<span class="text-slate-400">📊 ETF 視角:</span>'
+    + '<select onchange="setStockQueryEtfFilter(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs sm:text-sm flex-1 max-w-md">' + etfFilterOptions + '</select>'
+    + (stockQueryEtfFilter
+        ? '<span class="text-amber-400 text-xs">只看 ' + esc(stockQueryEtfFilter) + ' 的持股</span>'
+        : '<span class="text-slate-500 text-xs">顯示全部 ETF 合計</span>')
+    + '</div>';
+
+  // 用篩選後的資料聚合
+  const filteredAgg = aggregate(filteredSnapshot, queryPrices);
+  const filteredPrevAgg = aggregate(filteredPrevSnapshot, queryPrices);
+
+  // === 左側列表 ===
+  const all = Object.values(filteredAgg);
+  const filtered = stockSearch.trim()
+    ? all.filter(function(s) { return s.code.indexOf(stockSearch) !== -1 || s.name.indexOf(stockSearch) !== -1; })
+    : all.sort(function(a, b) { return b.total_lots - a.total_lots; }).slice(0, 30);
 
   let listHtml = '';
   filtered.forEach(function(s) {
@@ -1491,13 +1533,30 @@ function renderStock(todayAgg, prevAgg) {
   });
   if (!filtered.length) listHtml = '<div class="p-8 text-center text-sm text-slate-500">無符合</div>';
 
+  // 左側列表標題
+  let listTitle;
+  if (stockSearch.trim()) {
+    listTitle = '符合 ' + filtered.length + ' 檔';
+  } else if (stockQueryEtfFilter) {
+    listTitle = stockQueryEtfFilter + ' 持股 TOP 30';
+  } else {
+    listTitle = '合計持股 TOP 30';
+  }
+
+  // === 右側詳情 ===
+  const detail = selectedStock && filteredAgg[selectedStock];
+  const prevDetail = selectedStock && filteredPrevAgg[selectedStock];
+
   let detailHtml;
   if (!detail) {
-    if (selectedStock && stockQueryDate) {
+    if (selectedStock) {
       const stkName = todayAgg[selectedStock] ? todayAgg[selectedStock].name : selectedStock;
+      const reason = stockQueryEtfFilter
+        ? esc(stockQueryEtfFilter) + ' 在 ' + esc(queryDateLabel) + ' 沒有持有此股'
+        : esc(stkName) + ' 在 ' + esc(queryDateLabel) + ' 沒有任何 ETF 持有';
       detailHtml = '<div class="text-center py-12">'
-        + '<div class="text-amber-400 mb-2">⚠️ ' + esc(stkName) + ' 在 ' + esc(queryDateLabel) + ' 沒有任何 ETF 持有</div>'
-        + '<div class="text-xs text-slate-500">換個日期或切回最新試試</div>'
+        + '<div class="text-amber-400 mb-2">⚠️ ' + reason + '</div>'
+        + '<div class="text-xs text-slate-500">換個視角、日期或股票試試</div>'
         + '</div>';
     } else {
       detailHtml = '<div class="text-center text-sm text-slate-500 py-12">選擇左側個股查看詳情</div>';
@@ -1508,6 +1567,9 @@ function renderStock(todayAgg, prevAgg) {
     const diffColor = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-rose-400' : '');
     const dateBadge = stockQueryDate
       ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">' + esc(queryDateLabel) + '</span>'
+      : '';
+    const etfBadge = stockQueryEtfFilter
+      ? ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">' + esc(stockQueryEtfFilter) + ' 視角</span>'
       : '';
     const todayLabel = stockQueryDate ? '當日合計' : '今日合計';
     const prevLabel = queryPrevLabel ? '前一筆 (' + esc(queryPrevLabel) + ')' : '前日合計';
@@ -1537,26 +1599,27 @@ function renderStock(todayAgg, prevAgg) {
 
     detailHtml = '<div class="flex items-center justify-between mb-3 gap-2">'
       + '<div class="min-w-0">'
-      + '<div class="font-bold text-base sm:text-lg truncate">' + esc(detail.name) + dateBadge + '</div>'
+      + '<div class="font-bold text-base sm:text-lg truncate">' + esc(detail.name) + dateBadge + etfBadge + '</div>'
       + '<div class="text-xs text-slate-400">' + esc(detail.code) + ' · 收盤 ' + (detail.price ? fmt(detail.price, 2) : 'N/A') + '</div>'
       + '</div>'
-      + '<div class="text-right flex-shrink-0"><div class="text-xs text-slate-500">合計市值</div><div class="text-amber-400 font-bold">' + fmtM(detail.market_value) + '</div></div>'
+      + '<div class="text-right flex-shrink-0"><div class="text-xs text-slate-500">' + (stockQueryEtfFilter ? '此 ETF 持有市值' : '合計市值') + '</div><div class="text-amber-400 font-bold">' + fmtM(detail.market_value) + '</div></div>'
       + '</div>'
       + '<div class="grid grid-cols-3 gap-2 mb-4 text-center">'
       + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">' + todayLabel + '</div><div class="num font-semibold text-sm">' + fmt(detail.total_lots) + '張</div></div>'
       + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">' + prevLabel + '</div><div class="num text-sm">' + fmt(prevLots) + '張</div></div>'
       + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">變動</div><div class="num font-semibold text-sm ' + diffColor + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</div></div>'
       + '</div>'
-      + '<div class="text-xs text-slate-400 mb-2">持有此股的 ETF (' + detail.etfs.length + '檔):</div>'
+      + '<div class="text-xs text-slate-400 mb-2">' + (stockQueryEtfFilter ? '此 ETF 對該股票:' : '持有此股的 ETF (' + detail.etfs.length + '檔):') + '</div>'
       + '<div class="space-y-1">' + etfRowsHtml + '</div>';
   }
 
   return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">個股查詢</h2>'
     + dateSelectorHtml
+    + etfFilterHtml
     + '<input id="stock-search" value="' + esc(stockSearch) + '" placeholder="輸入股票代號或名稱 (如 2330 或 台積電)" class="w-full md:max-w-md bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm mb-4 focus:outline-none focus:border-amber-500">'
     + '<div class="grid md:grid-cols-2 gap-3 sm:gap-4">'
     + '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden max-h-[60vh] md:max-h-[70vh] overflow-y-auto">'
-    + '<div class="px-4 py-2 text-xs text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-900">' + (stockSearch.trim() ? '符合 ' + filtered.length + ' 檔' : '合計持股 TOP 30 (最新)') + '</div>'
+    + '<div class="px-4 py-2 text-xs text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-900">' + esc(listTitle) + '</div>'
     + '<div class="divide-y divide-slate-800">' + listHtml + '</div>'
     + '</div>'
     + '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4">' + detailHtml + '</div>'
