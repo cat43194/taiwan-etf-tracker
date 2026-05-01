@@ -133,6 +133,8 @@ const TOP_N_OVERVIEW = 20;
 const MULTI_TOP_N = 20;
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
 let NEW_ETFS = [];
+// ETF 明細支援多選 (selectedEtfMulti = null 表示用 selectedEtf 單選, 陣列 = 多選合計)
+let selectedEtfMulti = null;
 
 let HISTORY_DATES = null;
 let HISTORY_CACHE = {};
@@ -821,19 +823,33 @@ function renderModalHistory(stock) {
       + '<div class="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-48 overflow-y-auto bg-slate-950/50 p-2 rounded">' + checklistHtml + '</div>'
       + '</div>';
   } else {
-    let etfOptions = '<option value="__all__">全部 ETF 合計</option>';
-    etfOptions += '<option value="__custom__">✏️ 自選組合' + (Array.isArray(stockModalHistoryEtf) ? ' (目前 ' + stockModalHistoryEtf.length + ' 檔)' : '') + '</option>';
+    const isAll = !stockModalHistoryEtf;
+    const isCustom = Array.isArray(stockModalHistoryEtf);
+    const isSingle = typeof stockModalHistoryEtf === 'string';
+    const allBtnCls = isAll ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+    const customBtnCls = isCustom ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+
+    let singleOptions = '<option value="__placeholder__">— 選擇單檔 —</option>';
     allEtfCodes.forEach(function(k) {
-      const sel = stockModalHistoryEtf === k ? 'selected' : '';
+      const sel = isSingle && stockModalHistoryEtf === k ? 'selected' : '';
       const etfName = (DATA.today[k] && DATA.today[k].name) || k;
-      etfOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(etfName) + '</option>';
+      singleOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(etfName) + '</option>';
     });
-    filterHtml = '<div class="px-3 sm:px-4 py-3 border-b border-slate-800 flex flex-wrap items-center gap-2 text-xs sm:text-sm bg-slate-900/30">'
-      + '<span class="text-slate-400">📊 看哪個 ETF:</span>'
-      + '<select onchange="setStockModalHistoryEtf(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs sm:text-sm flex-1 max-w-md">' + etfOptions + '</select>';
-    if (Array.isArray(stockModalHistoryEtf) && stockModalHistoryEtf.length > 1) {
-      filterHtml += '<button onclick="setStockModalHistoryEtf(\'__custom__\')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">編輯組合</button>';
-      filterHtml += '<div class="basis-full text-xs text-slate-500 mt-1">已選: ' + stockModalHistoryEtf.map(esc).join(', ') + '</div>';
+
+    filterHtml = '<div class="px-3 sm:px-4 py-3 border-b border-slate-800 bg-slate-900/30">'
+      + '<div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
+      + '<span class="text-slate-400">📊 ETF 視角:</span>'
+      + '<button onclick="setStockModalHistoryEtf(\'__all__\')" class="px-3 py-1 rounded ' + allBtnCls + '">全部合計</button>'
+      + '<button onclick="setStockModalHistoryEtf(\'__custom__\')" class="px-3 py-1 rounded ' + customBtnCls + '">✏️ 自選組合' + (isCustom ? ' (' + stockModalHistoryEtf.length + ')' : '') + '</button>'
+      + '<span class="text-slate-500 mx-1">|</span>'
+      + '<span class="text-slate-400 text-xs">單檔:</span>'
+      + '<select onchange="if (this.value !== \'__placeholder__\') setStockModalHistoryEtf(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + singleOptions + '</select>'
+      + '</div>';
+    if (isCustom && stockModalHistoryEtf.length > 0) {
+      filterHtml += '<div class="text-xs text-slate-500 mt-2">'
+        + '已選: ' + stockModalHistoryEtf.map(esc).join(', ')
+        + ' <button onclick="setStockModalHistoryEtf(\'__custom__\')" class="ml-2 text-amber-400 hover:text-amber-300 underline">編輯</button>'
+        + '</div>';
     }
     filterHtml += '</div>';
   }
@@ -1482,26 +1498,97 @@ function renderMultiTable(rows, dir) {
 
 function renderETF() {
   const etfKeys = Object.keys(DATA.today);
-  if (!selectedEtf || !DATA.today[selectedEtf]) selectedEtf = etfKeys[0];
-  const today = DATA.today[selectedEtf];
-  const prev = DATA.prev && DATA.prev[selectedEtf];
-  const prevMap = {};
-  ((prev && prev.holdings) || []).forEach(function(h) { prevMap[h.code] = h.lots; });
-  const isNewEtf = NEW_ETFS.indexOf(selectedEtf) !== -1;
-  const rawRows = ((today && today.holdings) || []).map(function(h) {
-    const price = (DATA.prices && DATA.prices[h.code]) || null;
-    return {
-      code: h.code,
-      name: h.name,
-      lots: h.lots,
-      weight: h.weight,
-      prev_lots: prevMap[h.code] || 0,
-      diff: isNewEtf ? 0 : h.lots - (prevMap[h.code] || 0),
-      price: price,
-      mv: price ? h.lots * 1000 * price : null,
-    };
-  });
-  const totalMV = rawRows.reduce(function(s, r) { return s + (r.mv || 0); }, 0);
+  const isMulti = !!(selectedEtfMulti && selectedEtfMulti.length > 1);
+
+  if (!isMulti) {
+    if (!selectedEtf || !DATA.today[selectedEtf]) selectedEtf = etfKeys[0];
+  }
+
+  // === 計算要顯示的 holdings (單一 ETF or 多 ETF 合計) ===
+  let displayName, displayCode, displayHoldingsDate, isNewEtf, rawRows, totalMV, etfsInScope;
+
+  if (isMulti) {
+    // 多選: 合計
+    etfsInScope = selectedEtfMulti.filter(function(k) { return DATA.today[k]; });
+    displayCode = '自選 ' + etfsInScope.length + ' 檔';
+    displayName = '組合: ' + etfsInScope.join(', ');
+    displayHoldingsDate = null; // 多檔時不顯示單一日期
+    isNewEtf = false;
+
+    // 合併所有選中 ETF 的 holdings (按股票代號加總)
+    const merged = {};
+    etfsInScope.forEach(function(k) {
+      const etfData = DATA.today[k];
+      if (!etfData) return;
+      const prevHoldings = (DATA.prev && DATA.prev[k] && DATA.prev[k].holdings) || [];
+      const prevMap = {};
+      prevHoldings.forEach(function(h) { prevMap[h.code] = h.lots; });
+      const isThisNew = NEW_ETFS.indexOf(k) !== -1;
+
+      (etfData.holdings || []).forEach(function(h) {
+        if (!merged[h.code]) {
+          merged[h.code] = {
+            code: h.code,
+            name: h.name,
+            lots: 0,
+            prev_lots: 0,
+            weight_sum: 0,
+            etf_count: 0,
+            etfs: [],
+            has_new_etf: false,
+          };
+        }
+        merged[h.code].lots += h.lots;
+        merged[h.code].prev_lots += isThisNew ? h.lots : (prevMap[h.code] || 0);
+        merged[h.code].weight_sum += (h.weight || 0);
+        merged[h.code].etf_count += 1;
+        merged[h.code].etfs.push(k);
+        if (isThisNew) merged[h.code].has_new_etf = true;
+      });
+    });
+
+    rawRows = Object.values(merged).map(function(r) {
+      const price = (DATA.prices && DATA.prices[r.code]) || null;
+      return {
+        code: r.code,
+        name: r.name,
+        lots: r.lots,
+        weight: r.weight_sum / etfsInScope.length, // 平均權重 (僅供參考)
+        prev_lots: r.prev_lots,
+        diff: r.lots - r.prev_lots,
+        price: price,
+        mv: price ? r.lots * 1000 * price : null,
+        etf_count_in_scope: r.etf_count,
+        has_new_etf: r.has_new_etf,
+      };
+    });
+    totalMV = rawRows.reduce(function(s, r) { return s + (r.mv || 0); }, 0);
+  } else {
+    // 單選: 跟原本一樣
+    const today = DATA.today[selectedEtf];
+    const prev = DATA.prev && DATA.prev[selectedEtf];
+    const prevMap = {};
+    ((prev && prev.holdings) || []).forEach(function(h) { prevMap[h.code] = h.lots; });
+    isNewEtf = NEW_ETFS.indexOf(selectedEtf) !== -1;
+    rawRows = ((today && today.holdings) || []).map(function(h) {
+      const price = (DATA.prices && DATA.prices[h.code]) || null;
+      return {
+        code: h.code,
+        name: h.name,
+        lots: h.lots,
+        weight: h.weight,
+        prev_lots: prevMap[h.code] || 0,
+        diff: isNewEtf ? 0 : h.lots - (prevMap[h.code] || 0),
+        price: price,
+        mv: price ? h.lots * 1000 * price : null,
+      };
+    });
+    totalMV = rawRows.reduce(function(s, r) { return s + (r.mv || 0); }, 0);
+    displayName = today.name;
+    displayCode = selectedEtf;
+    displayHoldingsDate = today.holdings_date;
+    etfsInScope = [selectedEtf];
+  }
 
   const keyMap = {
     name: function(r) { return r.name; },
@@ -1512,56 +1599,94 @@ function renderETF() {
     price: function(r) { return r.price; },
     mv: function(r) { return r.mv; },
   };
-  const defaultSorted = [...rawRows].sort(function(a, b) { return b.weight - a.weight; });
-  const rows = (etfSort.key && etfSort.dir) ? sortRows(rawRows, etfSort, keyMap) : defaultSorted;
+  // 多選時預設按合計張數排序; 單選按比例
+  const defaultSort = isMulti
+    ? [...rawRows].sort(function(a, b) { return b.lots - a.lots; })
+    : [...rawRows].sort(function(a, b) { return b.weight - a.weight; });
+  const rows = (etfSort.key && etfSort.dir) ? sortRows(rawRows, etfSort, keyMap) : defaultSort;
 
   function thEtf(lab, key, align) {
     const a = align || 'right';
     return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleEtfSort(\'' + key + '\')">' + esc(lab) + sortIcon(etfSort, key) + '</th>';
   }
 
-  const newTag = isNewEtf ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">新增首日</span>' : '';
-  const newNote = isNewEtf ? '<div class="text-xs text-amber-400 mt-1">⚠️ 此 ETF 今日首次納入追蹤,持股變動不計入買賣超</div>' : '';
+  const newTag = !isMulti && isNewEtf ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">新增首日</span>' : '';
+  const newNote = !isMulti && isNewEtf ? '<div class="text-xs text-amber-400 mt-1">⚠️ 此 ETF 今日首次納入追蹤,持股變動不計入買賣超</div>' : '';
+  const multiTag = isMulti ? ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">合計視角</span>' : '';
 
   let etfBtnsHtml = '';
   etfKeys.forEach(function(k) {
     const isNew = NEW_ETFS.indexOf(k) !== -1;
-    const base = k === selectedEtf ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+    let isActive;
+    if (isMulti) {
+      isActive = selectedEtfMulti.indexOf(k) !== -1;
+    } else {
+      isActive = k === selectedEtf;
+    }
+    const base = isActive
+      ? (isMulti ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white')
+      : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
     const badge = isNew ? ' <span class="text-[10px] bg-amber-400/30 px-1 rounded">新</span>' : '';
     etfBtnsHtml += '<button data-etf="' + esc(k) + '" class="etf-btn px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ' + base + ' whitespace-nowrap">' + esc(k) + badge + '</button>';
   });
 
+  // 多選提示列
+  let multiHintHtml;
+  if (isMulti) {
+    multiHintHtml = '<div class="text-xs text-sky-300 mb-3 flex flex-wrap items-center gap-2 bg-sky-950/30 border border-sky-800/50 rounded p-2">'
+      + '<span>🔗 多選合計模式 — 已選 ' + selectedEtfMulti.length + ' 檔: ' + selectedEtfMulti.join(', ') + '</span>'
+      + '<button onclick="clearEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white">清除多選</button>'
+      + '<span class="text-slate-500 ml-auto">點擊 ETF 鈕 = 加入/移除組合</span>'
+      + '</div>';
+  } else {
+    multiHintHtml = '<div class="text-xs text-slate-500 mb-3">💡 提示: 按住 Ctrl/Cmd + 點擊 ETF 鈕,可以多選查看合計持股</div>';
+  }
+
   let rowsHtml = '';
   rows.forEach(function(r, i) {
-    const diffColor = isNewEtf ? 'text-amber-400' : (r.diff > 0 ? 'text-emerald-400' : (r.diff < 0 ? 'text-rose-400' : 'text-slate-500'));
-    const diffText = isNewEtf ? '首日' : (r.diff !== 0 ? (r.diff > 0 ? '+' : '') + fmt(r.diff) : '—');
+    const diffColor = (!isMulti && isNewEtf) ? 'text-amber-400' : (r.diff > 0 ? 'text-emerald-400' : (r.diff < 0 ? 'text-rose-400' : 'text-slate-500'));
+    const diffText = (!isMulti && isNewEtf) ? '首日' : (r.diff !== 0 ? (r.diff > 0 ? '+' : '') + fmt(r.diff) : '—');
+    const weightCell = isMulti ? r.etf_count_in_scope + '/' + etfsInScope.length + '檔' : r.weight.toFixed(2) + '%';
+    const weightTitle = isMulti ? '在自選 ' + etfsInScope.length + ' 檔中,共有 ' + r.etf_count_in_scope + ' 檔持有此股票' : '';
+
     rowsHtml += '<tr class="hover:bg-slate-800/30">'
       + '<td class="px-2 py-1.5 text-slate-500">' + (i + 1) + '</td>'
       + '<td class="px-2 py-1.5 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">'
-      + '<div class="text-slate-200 stk-name">' + esc(r.name) + '</div>'
+      + '<div class="text-slate-200 stk-name">' + esc(r.name) + (isMulti && r.has_new_etf ? '<span class="text-amber-400 text-xs ml-1">(含新)</span>' : '') + '</div>'
       + '<div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + '</div>'
       + '</td>'
-      + '<td class="px-2 py-1.5 text-right num">' + r.weight.toFixed(2) + '%</td>'
-      + '<td class="px-2 py-1.5 text-right num text-slate-400">' + (isNewEtf ? '—' : fmt(r.prev_lots)) + '</td>'
+      + '<td class="px-2 py-1.5 text-right num"' + (weightTitle ? ' title="' + esc(weightTitle) + '"' : '') + '>' + weightCell + '</td>'
+      + '<td class="px-2 py-1.5 text-right num text-slate-400">' + (!isMulti && isNewEtf ? '—' : fmt(r.prev_lots)) + '</td>'
       + '<td class="px-2 py-1.5 text-right num">' + fmt(r.lots) + '</td>'
       + '<td class="px-2 py-1.5 text-right num ' + diffColor + '">' + diffText + '</td>'
       + '<td class="px-2 py-1.5 text-right num text-slate-400">' + (r.price ? fmt(r.price, 2) : '-') + '</td>'
-      + '<td class="px-2 py-1.5 text-right num text-amber-400 whitespace-nowrap">' + fmtM(r.mv) + '</td>'
-      + '<td class="px-2 py-1.5 text-center">'
-      + '<button onclick="openHistoryModal(\'' + esc(selectedEtf) + '\',\'' + esc(r.code) + '\')" '
-      + 'title="查看 ' + esc(r.name) + ' 在此 ETF 的歷史持股" '
-      + 'class="bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-xs transition cursor-pointer whitespace-nowrap">📈 歷史</button>'
-      + '</td>'
-      + '</tr>';
+      + '<td class="px-2 py-1.5 text-right num text-amber-400 whitespace-nowrap">' + fmtM(r.mv) + '</td>';
+    // 歷史按鈕 (多選時不顯示, 因為歷史 modal 是針對單一 ETF×股票)
+    if (!isMulti) {
+      rowsHtml += '<td class="px-2 py-1.5 text-center">'
+        + '<button onclick="openHistoryModal(\'' + esc(selectedEtf) + '\',\'' + esc(r.code) + '\')" '
+        + 'title="查看 ' + esc(r.name) + ' 在此 ETF 的歷史持股" '
+        + 'class="bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-xs transition cursor-pointer whitespace-nowrap">📈 歷史</button>'
+        + '</td>';
+    } else {
+      rowsHtml += '<td class="px-2 py-1.5 text-center text-slate-600 text-xs">—</td>';
+    }
+    rowsHtml += '</tr>';
   });
 
+  const weightColLabel = isMulti ? '持有檔數' : '比例';
+  const headerInfo = isMulti
+    ? '自選 ' + etfsInScope.length + ' 檔合計 · ' + rows.length + ' 檔個股 · 合計市值 ' + fmtM(totalMV)
+    : '資料日期 ' + esc(displayHoldingsDate || '-') + ' · ' + rows.length + ' 檔 · 合計市值 ' + fmtM(totalMV);
+
   return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">ETF 明細</h2>'
-    + '<div class="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 mb-4">' + etfBtnsHtml + '</div>'
+    + '<div class="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 mb-3">' + etfBtnsHtml + '</div>'
+    + multiHintHtml
     + '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4">'
     + '<div class="flex items-start justify-between flex-wrap gap-2 mb-3">'
     + '<div class="min-w-0">'
-    + '<div class="font-semibold text-sm sm:text-base">' + esc(today.name) + ' (' + esc(selectedEtf) + ')' + newTag + '</div>'
-    + '<div class="text-xs text-slate-400 mt-0.5">資料日期 ' + esc(today.holdings_date || '-') + ' · ' + rows.length + ' 檔 · 合計市值 ' + fmtM(totalMV) + '</div>'
+    + '<div class="font-semibold text-sm sm:text-base">' + esc(displayName) + (isMulti ? '' : ' (' + esc(displayCode) + ')') + newTag + multiTag + '</div>'
+    + '<div class="text-xs text-slate-400 mt-0.5">' + headerInfo + '</div>'
     + newNote
     + '</div></div>'
     + '<div class="text-xs text-slate-500 mb-2">💡 點擊欄位標題排序</div>'
@@ -1570,7 +1695,7 @@ function renderETF() {
     + '<thead class="bg-slate-800/50 text-slate-400 text-xs"><tr>'
     + '<th class="px-2 py-2 text-left">#</th>'
     + thEtf('股票', 'name', 'left')
-    + thEtf('比例', 'weight')
+    + thEtf(weightColLabel, 'weight')
     + thEtf('前日', 'prev_lots')
     + thEtf('今日', 'lots')
     + thEtf('增減', 'diff')
@@ -1584,8 +1709,57 @@ function renderETF() {
 
 function bindEtf() {
   document.querySelectorAll('.etf-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { selectedEtf = btn.dataset.etf; render(); });
+    btn.addEventListener('click', function(e) {
+      const code = btn.dataset.etf;
+      // Ctrl/Cmd + 點擊 = 加入多選, 一般點擊 = 單選
+      if (e.ctrlKey || e.metaKey || selectedEtfMulti) {
+        // 多選模式
+        if (!selectedEtfMulti) {
+          // 從單選進入多選 (把目前選的 + 新點的都加進去)
+          selectedEtfMulti = selectedEtf && selectedEtf !== code ? [selectedEtf, code] : [code];
+        } else {
+          // 已在多選模式
+          const idx = selectedEtfMulti.indexOf(code);
+          if (idx >= 0) selectedEtfMulti.splice(idx, 1);
+          else selectedEtfMulti.push(code);
+        }
+        // 多選只剩 0/1 檔時退回單選
+        if (selectedEtfMulti.length === 0) {
+          selectedEtfMulti = null;
+        } else if (selectedEtfMulti.length === 1) {
+          selectedEtf = selectedEtfMulti[0];
+          selectedEtfMulti = null;
+        }
+      } else {
+        // 一般單選
+        selectedEtf = code;
+        selectedEtfMulti = null;
+      }
+      render();
+    });
   });
+}
+
+function clearEtfMulti() {
+  selectedEtfMulti = null;
+  render();
+}
+
+function toggleEtfMulti(code) {
+  if (!selectedEtfMulti) {
+    selectedEtfMulti = selectedEtf && selectedEtf !== code ? [selectedEtf, code] : [code];
+  } else {
+    const idx = selectedEtfMulti.indexOf(code);
+    if (idx >= 0) selectedEtfMulti.splice(idx, 1);
+    else selectedEtfMulti.push(code);
+  }
+  if (selectedEtfMulti.length === 0) {
+    selectedEtfMulti = null;
+  } else if (selectedEtfMulti.length === 1) {
+    selectedEtf = selectedEtfMulti[0];
+    selectedEtfMulti = null;
+  }
+  render();
 }
 
 function renderStock(todayAgg, prevAgg) {
@@ -1682,28 +1856,37 @@ function renderStock(todayAgg, prevAgg) {
       + '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 max-h-48 overflow-y-auto bg-slate-950/50 p-2 rounded">' + checklistHtml + '</div>'
       + '</div>';
   } else {
-    let etfFilterOptions = '<option value="__all__">全部 ETF 合計</option>';
-    etfFilterOptions += '<option value="__custom__">✏️ 自選組合' + (Array.isArray(stockQueryEtfFilter) ? ' (目前 ' + stockQueryEtfFilter.length + ' 檔)' : '') + '</option>';
+    // 三大快捷按鈕 + 單檔下拉
+    const isAll = !stockQueryEtfFilter;
+    const isCustom = Array.isArray(stockQueryEtfFilter);
+    const isSingle = typeof stockQueryEtfFilter === 'string';
+    const allBtnCls = isAll ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+    const customBtnCls = isCustom ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+
+    let singleOptions = '<option value="__placeholder__">— 選擇單檔 ETF —</option>';
     allEtfCodesSorted.forEach(function(k) {
-      const sel = stockQueryEtfFilter === k ? 'selected' : '';
+      const sel = isSingle && stockQueryEtfFilter === k ? 'selected' : '';
       const etfName = (DATA.today[k] && DATA.today[k].name) || k;
-      etfFilterOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(etfName) + '</option>';
+      singleOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(etfName) + '</option>';
     });
-    let viewNote;
-    if (!stockQueryEtfFilter) {
-      viewNote = '<span class="text-slate-500 text-xs">顯示全部 ETF 合計</span>';
-    } else if (typeof stockQueryEtfFilter === 'string') {
-      viewNote = '<span class="text-amber-400 text-xs">只看 ' + esc(stockQueryEtfFilter) + ' 的持股</span>';
-    } else {
-      viewNote = '<span class="text-sky-400 text-xs">自選 ' + stockQueryEtfFilter.length + ' 檔合計</span>';
-    }
-    etfFilterHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-3 flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
+
+    etfFilterHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-3">'
+      + '<div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
       + '<span class="text-slate-400">📊 ETF 視角:</span>'
-      + '<select onchange="setStockQueryEtfFilter(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs sm:text-sm flex-1 max-w-md">' + etfFilterOptions + '</select>'
-      + viewNote;
-    if (Array.isArray(stockQueryEtfFilter) && stockQueryEtfFilter.length > 0) {
-      etfFilterHtml += '<button onclick="setStockQueryEtfFilter(\'__custom__\')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">編輯組合</button>';
-      etfFilterHtml += '<div class="basis-full text-xs text-slate-500 mt-1">已選: ' + stockQueryEtfFilter.map(esc).join(', ') + '</div>';
+      + '<button onclick="setStockQueryEtfFilter(\'__all__\')" class="px-3 py-1 rounded ' + allBtnCls + '">全部 ETF 合計</button>'
+      + '<button onclick="setStockQueryEtfFilter(\'__custom__\')" class="px-3 py-1 rounded ' + customBtnCls + '">✏️ 自選組合' + (isCustom ? ' (' + stockQueryEtfFilter.length + ')' : '') + '</button>'
+      + '<span class="text-slate-500 mx-1">|</span>'
+      + '<span class="text-slate-400 text-xs">單檔:</span>'
+      + '<select onchange="if (this.value !== \'__placeholder__\') setStockQueryEtfFilter(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs sm:text-sm">' + singleOptions + '</select>'
+      + '</div>';
+    if (isCustom && stockQueryEtfFilter.length > 0) {
+      etfFilterHtml += '<div class="text-xs text-slate-500 mt-2">'
+        + '已選: ' + stockQueryEtfFilter.map(esc).join(', ')
+        + ' <button onclick="setStockQueryEtfFilter(\'__custom__\')" class="ml-2 text-amber-400 hover:text-amber-300 underline">編輯</button>'
+        + '</div>';
+    } else if (isSingle) {
+      const etfName = (DATA.today[stockQueryEtfFilter] && DATA.today[stockQueryEtfFilter].name) || '';
+      etfFilterHtml += '<div class="text-xs text-amber-400 mt-2">只看 ' + esc(stockQueryEtfFilter) + ' ' + esc(etfName) + ' 的持股</div>';
     }
     etfFilterHtml += '</div>';
   }
@@ -1812,14 +1995,14 @@ function renderStock(todayAgg, prevAgg) {
       + '<div class="font-bold text-base sm:text-lg truncate">' + esc(detail.name) + dateBadge + etfBadge + '</div>'
       + '<div class="text-xs text-slate-400">' + esc(detail.code) + ' · 收盤 ' + (detail.price ? fmt(detail.price, 2) : 'N/A') + '</div>'
       + '</div>'
-      + '<div class="text-right flex-shrink-0"><div class="text-xs text-slate-500">' + (stockQueryEtfFilter ? '此 ETF 持有市值' : '合計市值') + '</div><div class="text-amber-400 font-bold">' + fmtM(detail.market_value) + '</div></div>'
+      + '<div class="text-right flex-shrink-0"><div class="text-xs text-slate-500">' + mvLabel + '</div><div class="text-amber-400 font-bold">' + fmtM(detail.market_value) + '</div></div>'
       + '</div>'
       + '<div class="grid grid-cols-3 gap-2 mb-4 text-center">'
       + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">' + todayLabel + '</div><div class="num font-semibold text-sm">' + fmt(detail.total_lots) + '張</div></div>'
       + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">' + prevLabel + '</div><div class="num text-sm">' + fmt(prevLots) + '張</div></div>'
       + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">變動</div><div class="num font-semibold text-sm ' + diffColor + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</div></div>'
       + '</div>'
-      + '<div class="text-xs text-slate-400 mb-2">' + (stockQueryEtfFilter ? '此 ETF 對該股票:' : '持有此股的 ETF (' + detail.etfs.length + '檔):') + '</div>'
+      + '<div class="text-xs text-slate-400 mb-2">' + etfListLabel + '</div>'
       + '<div class="space-y-1">' + etfRowsHtml + '</div>';
   }
 
