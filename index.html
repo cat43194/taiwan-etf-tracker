@@ -243,9 +243,9 @@ let mvSort = { key: null, dir: null };
 let etfSort = { key: null, dir: null };
 let flowSort = { buy: { key: null, dir: null }, sell: { key: null, dir: null } };
 
-// 🔥 熱力圖狀態
-let heatmapEtfCode = null;   // null = 全部合計, 字串 = 單一 ETF code
-let heatmapWindow = 5;        // 3 或 5 個交易日
+// 🔥 熱力圖狀態 (TreeMap 版)
+let heatmapEtfCode = null;          // null = 全部合計, 字串 = 單一 ETF code
+let heatmapColorBy = 'lots_diff';   // 'lots_diff' = 張數變動 / 'price_change' = 股價漲跌
 let heatmapLoading = false;
 
 function fmt(n, d) {
@@ -2313,7 +2313,8 @@ document.querySelectorAll('.tab-btn').forEach(function(btn) {
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🔥 熱力圖 — 連續性訊號視覺化
+// 🔥 熱力圖 — TreeMap 版 (Finviz 風格)
+// 方塊大小 = 合計市值; 方塊顏色 = 張數變動 or 股價漲跌
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 async function changeHeatmapEtf(code) {
   heatmapEtfCode = (code === '__all__') ? null : code;
@@ -2325,76 +2326,107 @@ async function changeHeatmapEtf(code) {
   render();
 }
 
-async function changeHeatmapWindow(days) {
-  heatmapWindow = days;
-  if (!HISTORY_DATES) {
-    heatmapLoading = true; render();
-    await discoverHistoryDates();
-    heatmapLoading = false;
-  }
+function changeHeatmapColorBy(mode) {
+  heatmapColorBy = mode;
   render();
 }
 
-// 取某 ETF (或合計) 在某日對某股票的張數
-function _hmGetLots(etfCode, stockCode, dateStr) {
-  const snap = HISTORY_CACHE[dateStr];
-  if (!snap || !snap.today) return 0;
-  if (etfCode) {
-    const e = snap.today[etfCode];
-    if (!e) return 0;
-    const h = (e.holdings || []).find(function(hh) { return hh.code === stockCode; });
-    return h ? h.lots : 0;
-  }
-  let total = 0;
-  Object.values(snap.today).forEach(function(e) {
-    const h = (e.holdings || []).find(function(hh) { return hh.code === stockCode; });
-    if (h) total += h.lots;
-  });
-  return total;
+// Squarified TreeMap 演算法 (Bruls et al. 2000) — 純 JS 實作
+// 輸入: items=[{value, ...}], rect={x,y,w,h}
+// 輸出: items 中每筆會被加上 .rect = {x,y,w,h}
+function _treemapSquarify(items, x, y, w, h) {
+  const total = items.reduce(function(s, it) { return s + it.value; }, 0);
+  if (total <= 0) return;
+  const scale = (w * h) / total;
+  const queue = items.map(function(it) { return Object.assign({}, it, { area: it.value * scale }); });
+  _squarifyRecurse(queue, [], x, y, w, h, items);
 }
 
-// 取某 ETF (或合計) 在某日的持股 Top N
-function _hmTopN(etfCode, dateStr, n) {
-  const snap = HISTORY_CACHE[dateStr];
-  if (!snap || !snap.today) return [];
-  const agg = {};
-  if (etfCode) {
-    const e = snap.today[etfCode];
-    if (!e) return [];
-    (e.holdings || []).forEach(function(h) { agg[h.code] = { code: h.code, name: h.name, lots: h.lots }; });
+function _squarifyRecurse(items, row, x, y, w, h, output) {
+  if (!items.length) {
+    if (row.length) _layoutRow(row, x, y, w, h, output, true);
+    return;
+  }
+  const shorter = Math.min(w, h);
+  if (row.length === 0) {
+    _squarifyRecurse(items.slice(1), [items[0]], x, y, w, h, output);
+    return;
+  }
+  const newRow = row.concat([items[0]]);
+  if (_worst(row, shorter) >= _worst(newRow, shorter)) {
+    _squarifyRecurse(items.slice(1), newRow, x, y, w, h, output);
   } else {
-    Object.values(snap.today).forEach(function(e) {
-      (e.holdings || []).forEach(function(h) {
-        if (!agg[h.code]) agg[h.code] = { code: h.code, name: h.name, lots: 0 };
-        agg[h.code].lots += h.lots;
-      });
-    });
+    const layout = _layoutRow(row, x, y, w, h, output, false);
+    _squarifyRecurse(items, [], layout.x, layout.y, layout.w, layout.h, output);
   }
-  return Object.values(agg).sort(function(a, b) { return b.lots - a.lots; }).slice(0, n);
 }
 
-// 變動 → 顏色強度 (相對該股自身比較)
-function _hmCellCls(diff, maxAbs) {
-  if (diff === 0 || maxAbs === 0) return 'bg-slate-800/40 text-slate-600';
-  const r = Math.min(Math.abs(diff) / maxAbs, 1);
-  if (diff > 0) {
-    if (r > 0.66) return 'bg-emerald-500/70 text-white';
-    if (r > 0.33) return 'bg-emerald-500/40 text-emerald-100';
-    return 'bg-emerald-500/15 text-emerald-300';
+function _worst(row, shorter) {
+  if (!row.length) return Infinity;
+  const sum = row.reduce(function(s, it) { return s + it.area; }, 0);
+  let max = -Infinity, min = Infinity;
+  row.forEach(function(it) { if (it.area > max) max = it.area; if (it.area < min) min = it.area; });
+  const s2 = shorter * shorter;
+  const sum2 = sum * sum;
+  return Math.max((s2 * max) / sum2, sum2 / (s2 * min));
+}
+
+function _layoutRow(row, x, y, w, h, output, finalize) {
+  const sum = row.reduce(function(s, it) { return s + it.area; }, 0);
+  const horizontal = w >= h;
+  if (horizontal) {
+    const rh = sum / w;
+    let cx = x;
+    row.forEach(function(it) {
+      const cw = it.area / rh;
+      const target = output.find(function(o) { return o === it.__src; }) || it.__src;
+      target.rect = { x: cx, y: y, w: cw, h: rh };
+      cx += cw;
+    });
+    return { x: x, y: y + rh, w: w, h: h - rh };
+  } else {
+    const rw = sum / h;
+    let cy = y;
+    row.forEach(function(it) {
+      const ch = it.area / rw;
+      const target = output.find(function(o) { return o === it.__src; }) || it.__src;
+      target.rect = { x: x, y: cy, w: rw, h: ch };
+      cy += ch;
+    });
+    return { x: x + rw, y: y, w: w - rw, h: h };
   }
-  if (r > 0.66) return 'bg-rose-500/70 text-white';
-  if (r > 0.33) return 'bg-rose-500/40 text-rose-100';
-  return 'bg-rose-500/15 text-rose-300';
+}
+
+// 主入口: 對 items (含 .value 排序好) 配置 rect
+function treemapLayout(items, w, h) {
+  if (!items.length) return;
+  // 排序 by value desc + 把 src 標好以便回寫
+  items.sort(function(a, b) { return b.value - a.value; });
+  items.forEach(function(it) { it.rect = null; });
+  const sources = items.map(function(it) { return Object.assign(it, { __src: it }); });
+  _treemapSquarify(sources, 0, 0, w, h);
+}
+
+// 變動值 → 顏色 (相對該批最大絕對值正規化)
+function _treemapColor(val, maxAbs) {
+  if (val == null || isNaN(val)) return '#334155'; // slate-700 灰
+  if (Math.abs(val) < 1e-9 || maxAbs === 0) return '#334155';
+  const r = Math.min(Math.abs(val) / maxAbs, 1);
+  // 5 階強度
+  const greens = ['#0f3a1f', '#155d2e', '#16803c', '#15a34a', '#22c55e'];
+  const reds   = ['#3a1818', '#5d1d1d', '#991b1b', '#dc2626', '#ef4444'];
+  const idx = r > 0.8 ? 4 : r > 0.6 ? 3 : r > 0.4 ? 2 : r > 0.2 ? 1 : 0;
+  return val > 0 ? greens[idx] : reds[idx];
+}
+
+// 文字顏色 (深底 → 白; 淺底 → 黑)
+function _treemapTextColor(bg) {
+  // 簡單規則: 深紅深綠/灰 用白, 淺色暫時也用白(因為都偏深)
+  return '#ffffff';
 }
 
 function renderHeatmap() {
   if (heatmapLoading) return '<div class="text-center text-slate-400 py-12">載入歷史快照中...</div>';
-  if (!HISTORY_DATES) {
-    heatmapLoading = true;
-    discoverHistoryDates().then(function() { heatmapLoading = false; render(); });
-    return '<div class="text-center text-slate-400 py-12">載入歷史快照中...</div>';
-  }
-  if (HISTORY_DATES.length < 2) return '<div class="text-center text-rose-400 py-12">⚠️ 歷史快照不足,需要至少 2 天才能畫熱力圖</div>';
 
   // === 控制列 ===
   const etfKeys = Object.keys(DATA.today).sort();
@@ -2406,12 +2438,11 @@ function renderHeatmap() {
     const n = (DATA.today[k] && DATA.today[k].name) || k;
     opts += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(n) + '</option>';
   });
-  let winBtns = '';
-  [3, 5].forEach(function(d) {
-    const cls = heatmapWindow === d ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
-    winBtns += '<button onclick="changeHeatmapWindow(' + d + ')" class="px-3 py-1 text-xs sm:text-sm rounded ' + cls + '">近 ' + d + ' 日</button>';
-  });
-  const controls = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 mb-4">'
+
+  const lotsCls = heatmapColorBy === 'lots_diff' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+  const priceCls = heatmapColorBy === 'price_change' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+
+  const controls = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 mb-3">'
     + '<div class="flex flex-wrap items-center gap-2 mb-2 text-xs sm:text-sm">'
     + '<span class="text-slate-400">📊 視角:</span>'
     + '<button onclick="changeHeatmapEtf(\'__all__\')" class="px-3 py-1 rounded ' + allCls + '">全部 ETF 合計</button>'
@@ -2420,91 +2451,178 @@ function renderHeatmap() {
     + '<select onchange="if (this.value !== \'__placeholder__\') changeHeatmapEtf(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + opts + '</select>'
     + '</div>'
     + '<div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
-    + '<span class="text-slate-400">⏱️ 期間:</span>' + winBtns
+    + '<span class="text-slate-400">🎨 顏色基準:</span>'
+    + '<button onclick="changeHeatmapColorBy(\'lots_diff\')" class="px-3 py-1 rounded ' + lotsCls + '">📦 ETF 持股張數變動</button>'
+    + '<button onclick="changeHeatmapColorBy(\'price_change\')" class="px-3 py-1 rounded ' + priceCls + '">💹 股價日漲跌</button>'
     + '</div></div>';
 
-  // === 計算資料 ===
-  // 需要 N+1 天 (因為要算當日 - 前日 = 當日變動)
-  const dates = HISTORY_DATES.slice(0, Math.min(heatmapWindow + 1, HISTORY_DATES.length));
-  if (dates.length < 2) return controls + '<div class="text-center text-amber-400 py-12">⚠️ 歷史不足</div>';
-  const latestDate = dates[0];
-  const topStocks = _hmTopN(heatmapEtfCode, latestDate, 30);
-  if (!topStocks.length) return controls + '<div class="text-center text-amber-400 py-12">⚠️ 此 ETF 在這段期間無持股資料</div>';
+  // === 取資料 (依視角篩選 ETF) ===
+  const targetEtfs = heatmapEtfCode ? [heatmapEtfCode] : Object.keys(DATA.today);
+  const filteredSnap = {};
+  const filteredPrev = {};
+  targetEtfs.forEach(function(ec) {
+    if (DATA.today[ec]) filteredSnap[ec] = DATA.today[ec];
+    if (DATA.prev && DATA.prev[ec]) filteredPrev[ec] = DATA.prev[ec];
+  });
+  const todayAgg = aggregate(filteredSnap, DATA.prices || {});
+  const prevAgg = aggregate(filteredPrev, DATA.prices || {});
 
-  // 矩陣 (列=股票, 欄=日期變動)
-  const matrix = topStocks.map(function(s) {
-    const cells = [];
-    for (let i = 0; i < dates.length - 1; i++) {
-      const tDay = dates[i], yDay = dates[i + 1];
-      const tLots = _hmGetLots(heatmapEtfCode, s.code, tDay);
-      const yLots = _hmGetLots(heatmapEtfCode, s.code, yDay);
-      cells.push({ date: tDay, diff: tLots - yLots });
+  // 找前一日的價格 (從歷史快照,若無則 fallback 到今日價格 → 漲跌 = 0)
+  let prevPrices = {};
+  if (HISTORY_DATES && HISTORY_DATES.length >= 2) {
+    const prevSnapDate = HISTORY_DATES[1];
+    const prevSnap = HISTORY_CACHE[prevSnapDate];
+    if (prevSnap && prevSnap.prices) prevPrices = prevSnap.prices;
+  }
+
+  // 取持股 Top 50
+  const stocks = Object.values(todayAgg)
+    .filter(function(s) { return s.market_value && s.market_value > 0; })
+    .sort(function(a, b) { return b.market_value - a.market_value; })
+    .slice(0, 50);
+
+  if (!stocks.length) {
+    return controls + '<div class="bg-slate-900 border border-slate-800 rounded-lg p-12 text-center text-slate-500">⚠️ 無持股資料</div>';
+  }
+
+  // 計算每檔股票的兩種變動值
+  stocks.forEach(function(s) {
+    const prevS = prevAgg[s.code];
+    const prevLots = prevS ? prevS.total_lots : 0;
+    s.lots_diff = s.total_lots - prevLots;
+    const prevPrice = prevPrices[s.code];
+    if (s.price && prevPrice && prevPrice > 0) {
+      s.price_change_pct = ((s.price - prevPrice) / prevPrice) * 100;
+    } else {
+      s.price_change_pct = null;
     }
-    return { code: s.code, name: s.name, latestLots: s.lots, cells: cells };
+    s.value = s.market_value;
   });
 
-  // 標題
+  // 計算最大絕對值 (顏色強度正規化用)
+  let maxAbsLots = 0, maxAbsPrice = 0;
+  stocks.forEach(function(s) {
+    if (Math.abs(s.lots_diff) > maxAbsLots) maxAbsLots = Math.abs(s.lots_diff);
+    if (s.price_change_pct != null && Math.abs(s.price_change_pct) > maxAbsPrice) {
+      maxAbsPrice = Math.abs(s.price_change_pct);
+    }
+  });
+
+  // === 計算 TreeMap 佈局 ===
+  // 桌機 viewBox 1200x700, 手機自適應
+  const VW = 1200, VH = 700;
+  treemapLayout(stocks, VW, VH);
+
+  // === 產生 SVG ===
   let title;
   if (heatmapEtfCode) {
     const en = (DATA.today[heatmapEtfCode] && DATA.today[heatmapEtfCode].name) || '';
-    title = '<span class="text-amber-400 font-semibold">' + esc(heatmapEtfCode) + ' ' + esc(en) + '</span>';
+    title = esc(heatmapEtfCode) + ' ' + esc(en);
   } else {
-    title = '<span class="text-amber-400 font-semibold">全部 ETF 合計</span>';
+    title = '全部 ETF 合計 (' + targetEtfs.length + ' 檔)';
   }
+  const colorByLabel = heatmapColorBy === 'lots_diff' ? 'ETF 持股張數變動' : '股價日漲跌';
+  const colorByMax = heatmapColorBy === 'lots_diff' ? maxAbsLots : maxAbsPrice;
+  const totalMV = stocks.reduce(function(s, st) { return s + st.market_value; }, 0);
 
-  // 表頭 (日期由舊到新顯示,符合時間順序)
-  const datesAsc = matrix[0].cells.map(function(c) { return c.date; }).reverse();
-  let header = '<tr><th class="text-left px-2 py-2 text-xs text-slate-400 sticky left-0 bg-slate-800/80 z-10 min-w-[110px]">股票</th>';
-  datesAsc.forEach(function(d) {
-    header += '<th class="text-center px-1 py-2 text-xs text-slate-400 min-w-[60px]">' + esc(d.substring(5)) + '</th>';
+  let rects = '';
+  stocks.forEach(function(s) {
+    if (!s.rect) return;
+    const r = s.rect;
+    const val = heatmapColorBy === 'lots_diff' ? s.lots_diff : s.price_change_pct;
+    const color = _treemapColor(val, colorByMax);
+    const txtColor = _treemapTextColor(color);
+
+    // 文字大小依方塊大小
+    const minSide = Math.min(r.w, r.h);
+    const showName = minSide >= 30;
+    const showValue = minSide >= 50;
+    const showCode = minSide >= 70;
+    const nameSize = Math.max(10, Math.min(28, minSide * 0.18));
+    const valueSize = Math.max(8, Math.min(20, minSide * 0.13));
+    const codeSize = Math.max(7, Math.min(11, minSide * 0.08));
+
+    // 變動文字
+    let valueText = '—';
+    if (val != null) {
+      if (heatmapColorBy === 'lots_diff') {
+        valueText = (val > 0 ? '+' : '') + fmt(val);
+      } else {
+        valueText = (val > 0 ? '+' : '') + val.toFixed(2) + '%';
+      }
+    }
+
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const tooltipLots = (s.lots_diff > 0 ? '+' : '') + fmt(s.lots_diff) + ' 張';
+    const tooltipPrice = s.price_change_pct != null ? (s.price_change_pct > 0 ? '+' : '') + s.price_change_pct.toFixed(2) + '%' : 'N/A';
+    const tooltip = esc(s.name) + ' (' + esc(s.code) + ')\\n'
+      + '市值: ' + fmtM(s.market_value) + '\\n'
+      + '張數變動: ' + tooltipLots + '\\n'
+      + '股價漲跌: ' + tooltipPrice;
+
+    rects += '<g class="hm-cell" style="cursor:pointer" onclick="openStockModal(\'' + esc(s.code) + '\')">'
+      + '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" '
+      + 'fill="' + color + '" stroke="#0f172a" stroke-width="2">'
+      + '<title>' + tooltip + '</title>'
+      + '</rect>';
+    if (showName) {
+      rects += '<text x="' + cx + '" y="' + (cy - (showValue ? valueSize * 0.6 : 0)) + '" '
+        + 'text-anchor="middle" dominant-baseline="middle" '
+        + 'fill="' + txtColor + '" font-size="' + nameSize + '" font-weight="700" '
+        + 'style="pointer-events:none">' + esc(s.name) + '</text>';
+    }
+    if (showValue) {
+      rects += '<text x="' + cx + '" y="' + (cy + nameSize * 0.7) + '" '
+        + 'text-anchor="middle" dominant-baseline="middle" '
+        + 'fill="' + txtColor + '" font-size="' + valueSize + '" font-weight="600" opacity="0.95" '
+        + 'style="pointer-events:none">' + valueText + '</text>';
+    }
+    if (showCode) {
+      rects += '<text x="' + (r.x + r.w - 6) + '" y="' + (r.y + 14) + '" '
+        + 'text-anchor="end" fill="' + txtColor + '" font-size="' + codeSize + '" opacity="0.7" '
+        + 'style="pointer-events:none">' + esc(s.code) + '</text>';
+    }
+    rects += '</g>';
   });
-  header += '<th class="text-right px-2 py-2 text-xs text-slate-400 min-w-[80px]">期間總</th></tr>';
 
-  // 表身
-  let body = '';
-  matrix.forEach(function(row) {
-    const maxAbs = row.cells.reduce(function(m, c) { return Math.max(m, Math.abs(c.diff)); }, 0);
-    const totalDiff = row.cells.reduce(function(s, c) { return s + c.diff; }, 0);
-    const totalColor = totalDiff > 0 ? 'text-emerald-400' : (totalDiff < 0 ? 'text-rose-400' : 'text-slate-500');
-    let positives = 0, negatives = 0;
-    row.cells.forEach(function(c) { if (c.diff > 0) positives++; else if (c.diff < 0) negatives++; });
-    const streak = (positives >= 3 && negatives === 0) ? '⭐' : ((negatives >= 3 && positives === 0) ? '⚠️' : '');
-
-    body += '<tr class="hover:bg-slate-800/40">'
-      + '<td class="px-2 py-1.5 sticky left-0 bg-slate-900 z-10 stock-link" onclick="openStockModal(\'' + esc(row.code) + '\')">'
-      + '<div class="flex items-center gap-1">'
-      + '<span class="text-slate-200 text-xs sm:text-sm truncate" style="max-width:80px">' + esc(row.name) + '</span>'
-      + (streak ? ' <span class="text-sm">' + streak + '</span>' : '')
-      + '</div>'
-      + '<div class="text-[10px] text-slate-500">' + esc(row.code) + '</div>'
-      + '</td>';
-    const cellsAsc = [...row.cells].reverse();
-    cellsAsc.forEach(function(c) {
-      const cls = _hmCellCls(c.diff, maxAbs);
-      const sign = c.diff > 0 ? '+' : '';
-      const text = c.diff === 0 ? '—' : sign + fmt(c.diff);
-      body += '<td class="text-center px-1 py-1.5 text-xs num font-semibold ' + cls + '" title="' + esc(c.date) + ': ' + text + ' 張">' + text + '</td>';
-    });
-    body += '<td class="text-right px-2 py-1.5 text-xs num font-semibold ' + totalColor + '">' + (totalDiff > 0 ? '+' : '') + fmt(totalDiff) + '</td>';
-    body += '</tr>';
-  });
-
-  return controls
-    + '<div class="text-xs text-slate-400 mb-2">'
-    + '🔥 ' + title + ' · 持股 Top 30 · 近 ' + heatmapWindow + ' 個交易日的<b>每日張數變動</b>'
-    + '</div>'
-    + '<div class="text-xs text-slate-500 mb-3 leading-relaxed">'
-    + '💡 顏色深淺 = 該股自身的變動幅度 · '
-    + '<span class="bg-emerald-500/40 text-emerald-100 px-1 rounded">綠</span> 加碼 · '
-    + '<span class="bg-rose-500/40 text-rose-100 px-1 rounded">紅</span> 減碼 · '
-    + '<b>⭐</b> = 連續 ≥3 日加碼 · <b>⚠️</b> = 連續 ≥3 日減碼 · 點股票名稱看詳情'
-    + '</div>'
-    + '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
-    + '<table class="w-full text-sm">'
-    + '<thead class="bg-slate-800/50 sticky top-0">' + header + '</thead>'
-    + '<tbody class="divide-y divide-slate-800">' + body + '</tbody>'
-    + '</table>'
+  const svgHtml = '<div class="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden">'
+    + '<svg viewBox="0 0 ' + VW + ' ' + VH + '" preserveAspectRatio="xMidYMid meet" style="width:100%;display:block;background:#020617">'
+    + rects
+    + '</svg>'
     + '</div>';
+
+  // 圖例
+  const legendBlocks = function(positive) {
+    const colors = positive ? ['#0f3a1f', '#155d2e', '#16803c', '#15a34a', '#22c55e']
+                           : ['#3a1818', '#5d1d1d', '#991b1b', '#dc2626', '#ef4444'];
+    const arr = positive ? colors : [...colors].reverse();
+    return arr.map(function(c) {
+      return '<span style="display:inline-block;width:14px;height:14px;background:' + c + ';"></span>';
+    }).join('');
+  };
+
+  const stats = '<div class="text-xs text-slate-400 mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">'
+    + '<span>🔥 <b>' + esc(title) + '</b></span>'
+    + '<span class="text-slate-500">·</span>'
+    + '<span>持股 Top ' + stocks.length + '</span>'
+    + '<span class="text-slate-500">·</span>'
+    + '<span>合計市值 <b class="text-amber-400">' + fmtM(totalMV) + '</b></span>'
+    + '<span class="text-slate-500">·</span>'
+    + '<span>方塊大小 = 合計市值</span>'
+    + '<span class="text-slate-500">·</span>'
+    + '<span>方塊顏色 = ' + colorByLabel + '</span>'
+    + '</div>'
+    + '<div class="text-xs text-slate-500 mb-3 flex flex-wrap items-center gap-2">'
+    + '<span>強度刻度:</span>'
+    + '<span class="text-rose-400">減 / 跌</span>'
+    + legendBlocks(false)
+    + '<span class="text-slate-500 mx-1">|</span>'
+    + legendBlocks(true)
+    + '<span class="text-emerald-400">加 / 漲</span>'
+    + '<span class="text-slate-500 ml-2">· 點任一方塊看個股 modal · 滑鼠停留看詳細數字</span>'
+    + '</div>';
+
+  return controls + stats + svgHtml;
 }
 
 function loadData() {
