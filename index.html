@@ -90,6 +90,7 @@
     <button data-tab="mv" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">市值 TOP 50</button>
     <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
+    <button data-tab="heatmap" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">🔥 熱力圖</button>
   </div>
   <div id="new-etf-banner" class="hidden max-w-7xl mx-auto px-3 sm:px-4 py-2 bg-amber-950/40 border-t border-amber-600/30 text-xs text-amber-300"></div>
 </header>
@@ -241,6 +242,11 @@ let stockModalCustomSelected = [];
 let mvSort = { key: null, dir: null };
 let etfSort = { key: null, dir: null };
 let flowSort = { buy: { key: null, dir: null }, sell: { key: null, dir: null } };
+
+// 🔥 熱力圖狀態
+let heatmapEtfCode = null;   // null = 全部合計, 字串 = 單一 ETF code
+let heatmapWindow = 5;        // 3 或 5 個交易日
+let heatmapLoading = false;
 
 function fmt(n, d) {
   d = d || 0;
@@ -1276,6 +1282,7 @@ function render() {
   }
   else if (currentTab === 'etf') { main.innerHTML = renderETF(); bindEtf(); }
   else if (currentTab === 'stock') { main.innerHTML = renderStock(todayAgg, prevAgg); bindStock(todayAgg, prevAgg); }
+  else if (currentTab === 'heatmap') { main.innerHTML = renderHeatmap(); }
 }
 
 function renderOverview(todayAgg, prevAgg, buy, sell, mv, prevMvRank) {
@@ -2304,6 +2311,201 @@ function bindStock(todayAgg, prevAgg) {
 document.querySelectorAll('.tab-btn').forEach(function(btn) {
   btn.addEventListener('click', function() { currentTab = btn.dataset.tab; render(); });
 });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🔥 熱力圖 — 連續性訊號視覺化
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function changeHeatmapEtf(code) {
+  heatmapEtfCode = (code === '__all__') ? null : code;
+  if (!HISTORY_DATES) {
+    heatmapLoading = true; render();
+    await discoverHistoryDates();
+    heatmapLoading = false;
+  }
+  render();
+}
+
+async function changeHeatmapWindow(days) {
+  heatmapWindow = days;
+  if (!HISTORY_DATES) {
+    heatmapLoading = true; render();
+    await discoverHistoryDates();
+    heatmapLoading = false;
+  }
+  render();
+}
+
+// 取某 ETF (或合計) 在某日對某股票的張數
+function _hmGetLots(etfCode, stockCode, dateStr) {
+  const snap = HISTORY_CACHE[dateStr];
+  if (!snap || !snap.today) return 0;
+  if (etfCode) {
+    const e = snap.today[etfCode];
+    if (!e) return 0;
+    const h = (e.holdings || []).find(function(hh) { return hh.code === stockCode; });
+    return h ? h.lots : 0;
+  }
+  let total = 0;
+  Object.values(snap.today).forEach(function(e) {
+    const h = (e.holdings || []).find(function(hh) { return hh.code === stockCode; });
+    if (h) total += h.lots;
+  });
+  return total;
+}
+
+// 取某 ETF (或合計) 在某日的持股 Top N
+function _hmTopN(etfCode, dateStr, n) {
+  const snap = HISTORY_CACHE[dateStr];
+  if (!snap || !snap.today) return [];
+  const agg = {};
+  if (etfCode) {
+    const e = snap.today[etfCode];
+    if (!e) return [];
+    (e.holdings || []).forEach(function(h) { agg[h.code] = { code: h.code, name: h.name, lots: h.lots }; });
+  } else {
+    Object.values(snap.today).forEach(function(e) {
+      (e.holdings || []).forEach(function(h) {
+        if (!agg[h.code]) agg[h.code] = { code: h.code, name: h.name, lots: 0 };
+        agg[h.code].lots += h.lots;
+      });
+    });
+  }
+  return Object.values(agg).sort(function(a, b) { return b.lots - a.lots; }).slice(0, n);
+}
+
+// 變動 → 顏色強度 (相對該股自身比較)
+function _hmCellCls(diff, maxAbs) {
+  if (diff === 0 || maxAbs === 0) return 'bg-slate-800/40 text-slate-600';
+  const r = Math.min(Math.abs(diff) / maxAbs, 1);
+  if (diff > 0) {
+    if (r > 0.66) return 'bg-emerald-500/70 text-white';
+    if (r > 0.33) return 'bg-emerald-500/40 text-emerald-100';
+    return 'bg-emerald-500/15 text-emerald-300';
+  }
+  if (r > 0.66) return 'bg-rose-500/70 text-white';
+  if (r > 0.33) return 'bg-rose-500/40 text-rose-100';
+  return 'bg-rose-500/15 text-rose-300';
+}
+
+function renderHeatmap() {
+  if (heatmapLoading) return '<div class="text-center text-slate-400 py-12">載入歷史快照中...</div>';
+  if (!HISTORY_DATES) {
+    heatmapLoading = true;
+    discoverHistoryDates().then(function() { heatmapLoading = false; render(); });
+    return '<div class="text-center text-slate-400 py-12">載入歷史快照中...</div>';
+  }
+  if (HISTORY_DATES.length < 2) return '<div class="text-center text-rose-400 py-12">⚠️ 歷史快照不足,需要至少 2 天才能畫熱力圖</div>';
+
+  // === 控制列 ===
+  const etfKeys = Object.keys(DATA.today).sort();
+  const isAll = !heatmapEtfCode;
+  const allCls = isAll ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+  let opts = '<option value="__placeholder__">— 選擇單檔 ETF —</option>';
+  etfKeys.forEach(function(k) {
+    const sel = !isAll && heatmapEtfCode === k ? 'selected' : '';
+    const n = (DATA.today[k] && DATA.today[k].name) || k;
+    opts += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(n) + '</option>';
+  });
+  let winBtns = '';
+  [3, 5].forEach(function(d) {
+    const cls = heatmapWindow === d ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+    winBtns += '<button onclick="changeHeatmapWindow(' + d + ')" class="px-3 py-1 text-xs sm:text-sm rounded ' + cls + '">近 ' + d + ' 日</button>';
+  });
+  const controls = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 mb-4">'
+    + '<div class="flex flex-wrap items-center gap-2 mb-2 text-xs sm:text-sm">'
+    + '<span class="text-slate-400">📊 視角:</span>'
+    + '<button onclick="changeHeatmapEtf(\'__all__\')" class="px-3 py-1 rounded ' + allCls + '">全部 ETF 合計</button>'
+    + '<span class="text-slate-500 mx-1">|</span>'
+    + '<span class="text-slate-400 text-xs">單檔:</span>'
+    + '<select onchange="if (this.value !== \'__placeholder__\') changeHeatmapEtf(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + opts + '</select>'
+    + '</div>'
+    + '<div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
+    + '<span class="text-slate-400">⏱️ 期間:</span>' + winBtns
+    + '</div></div>';
+
+  // === 計算資料 ===
+  // 需要 N+1 天 (因為要算當日 - 前日 = 當日變動)
+  const dates = HISTORY_DATES.slice(0, Math.min(heatmapWindow + 1, HISTORY_DATES.length));
+  if (dates.length < 2) return controls + '<div class="text-center text-amber-400 py-12">⚠️ 歷史不足</div>';
+  const latestDate = dates[0];
+  const topStocks = _hmTopN(heatmapEtfCode, latestDate, 30);
+  if (!topStocks.length) return controls + '<div class="text-center text-amber-400 py-12">⚠️ 此 ETF 在這段期間無持股資料</div>';
+
+  // 矩陣 (列=股票, 欄=日期變動)
+  const matrix = topStocks.map(function(s) {
+    const cells = [];
+    for (let i = 0; i < dates.length - 1; i++) {
+      const tDay = dates[i], yDay = dates[i + 1];
+      const tLots = _hmGetLots(heatmapEtfCode, s.code, tDay);
+      const yLots = _hmGetLots(heatmapEtfCode, s.code, yDay);
+      cells.push({ date: tDay, diff: tLots - yLots });
+    }
+    return { code: s.code, name: s.name, latestLots: s.lots, cells: cells };
+  });
+
+  // 標題
+  let title;
+  if (heatmapEtfCode) {
+    const en = (DATA.today[heatmapEtfCode] && DATA.today[heatmapEtfCode].name) || '';
+    title = '<span class="text-amber-400 font-semibold">' + esc(heatmapEtfCode) + ' ' + esc(en) + '</span>';
+  } else {
+    title = '<span class="text-amber-400 font-semibold">全部 ETF 合計</span>';
+  }
+
+  // 表頭 (日期由舊到新顯示,符合時間順序)
+  const datesAsc = matrix[0].cells.map(function(c) { return c.date; }).reverse();
+  let header = '<tr><th class="text-left px-2 py-2 text-xs text-slate-400 sticky left-0 bg-slate-800/80 z-10 min-w-[110px]">股票</th>';
+  datesAsc.forEach(function(d) {
+    header += '<th class="text-center px-1 py-2 text-xs text-slate-400 min-w-[60px]">' + esc(d.substring(5)) + '</th>';
+  });
+  header += '<th class="text-right px-2 py-2 text-xs text-slate-400 min-w-[80px]">期間總</th></tr>';
+
+  // 表身
+  let body = '';
+  matrix.forEach(function(row) {
+    const maxAbs = row.cells.reduce(function(m, c) { return Math.max(m, Math.abs(c.diff)); }, 0);
+    const totalDiff = row.cells.reduce(function(s, c) { return s + c.diff; }, 0);
+    const totalColor = totalDiff > 0 ? 'text-emerald-400' : (totalDiff < 0 ? 'text-rose-400' : 'text-slate-500');
+    let positives = 0, negatives = 0;
+    row.cells.forEach(function(c) { if (c.diff > 0) positives++; else if (c.diff < 0) negatives++; });
+    const streak = (positives >= 3 && negatives === 0) ? '⭐' : ((negatives >= 3 && positives === 0) ? '⚠️' : '');
+
+    body += '<tr class="hover:bg-slate-800/40">'
+      + '<td class="px-2 py-1.5 sticky left-0 bg-slate-900 z-10 stock-link" onclick="openStockModal(\'' + esc(row.code) + '\')">'
+      + '<div class="flex items-center gap-1">'
+      + '<span class="text-slate-200 text-xs sm:text-sm truncate" style="max-width:80px">' + esc(row.name) + '</span>'
+      + (streak ? ' <span class="text-sm">' + streak + '</span>' : '')
+      + '</div>'
+      + '<div class="text-[10px] text-slate-500">' + esc(row.code) + '</div>'
+      + '</td>';
+    const cellsAsc = [...row.cells].reverse();
+    cellsAsc.forEach(function(c) {
+      const cls = _hmCellCls(c.diff, maxAbs);
+      const sign = c.diff > 0 ? '+' : '';
+      const text = c.diff === 0 ? '—' : sign + fmt(c.diff);
+      body += '<td class="text-center px-1 py-1.5 text-xs num font-semibold ' + cls + '" title="' + esc(c.date) + ': ' + text + ' 張">' + text + '</td>';
+    });
+    body += '<td class="text-right px-2 py-1.5 text-xs num font-semibold ' + totalColor + '">' + (totalDiff > 0 ? '+' : '') + fmt(totalDiff) + '</td>';
+    body += '</tr>';
+  });
+
+  return controls
+    + '<div class="text-xs text-slate-400 mb-2">'
+    + '🔥 ' + title + ' · 持股 Top 30 · 近 ' + heatmapWindow + ' 個交易日的<b>每日張數變動</b>'
+    + '</div>'
+    + '<div class="text-xs text-slate-500 mb-3 leading-relaxed">'
+    + '💡 顏色深淺 = 該股自身的變動幅度 · '
+    + '<span class="bg-emerald-500/40 text-emerald-100 px-1 rounded">綠</span> 加碼 · '
+    + '<span class="bg-rose-500/40 text-rose-100 px-1 rounded">紅</span> 減碼 · '
+    + '<b>⭐</b> = 連續 ≥3 日加碼 · <b>⚠️</b> = 連續 ≥3 日減碼 · 點股票名稱看詳情'
+    + '</div>'
+    + '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
+    + '<table class="w-full text-sm">'
+    + '<thead class="bg-slate-800/50 sticky top-0">' + header + '</thead>'
+    + '<tbody class="divide-y divide-slate-800">' + body + '</tbody>'
+    + '</table>'
+    + '</div>';
+}
 
 function loadData() {
   fetch('./latest.json?t=' + Date.now())
