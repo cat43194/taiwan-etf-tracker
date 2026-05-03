@@ -2331,80 +2331,85 @@ function changeHeatmapColorBy(mode) {
   render();
 }
 
-// Squarified TreeMap 演算法 (Bruls et al. 2000) — 純 JS 實作
-// 輸入: items=[{value, ...}], rect={x,y,w,h}
-// 輸出: items 中每筆會被加上 .rect = {x,y,w,h}
-function _treemapSquarify(items, x, y, w, h) {
-  const total = items.reduce(function(s, it) { return s + it.value; }, 0);
-  if (total <= 0) return;
-  const scale = (w * h) / total;
-  const queue = items.map(function(it) { return Object.assign({}, it, { area: it.value * scale }); });
-  _squarifyRecurse(queue, [], x, y, w, h, items);
+// Squarified TreeMap (修正版) — 把 items 切成多列,每列盡量讓方塊接近正方
+// items: [{value, ...}] (調用前已排序 desc)
+// 直接在 items 上加 .rect = {x,y,w,h}
+function treemapLayout(items, totalW, totalH) {
+  if (!items.length) return;
+  items.sort(function(a, b) { return b.value - a.value; });
+  // 過濾 value <= 0
+  const valid = items.filter(function(it) { return it.value > 0; });
+  if (!valid.length) return;
+  const total = valid.reduce(function(s, it) { return s + it.value; }, 0);
+  const scale = (totalW * totalH) / total;
+  // 給每筆一個 area
+  valid.forEach(function(it) { it.area = it.value * scale; });
+
+  _squarify(valid, 0, 0, totalW, totalH);
 }
 
-function _squarifyRecurse(items, row, x, y, w, h, output) {
-  if (!items.length) {
-    if (row.length) _layoutRow(row, x, y, w, h, output, true);
+function _squarify(items, x, y, w, h) {
+  if (!items.length) return;
+  if (items.length === 1) {
+    items[0].rect = { x: x, y: y, w: w, h: h };
     return;
   }
-  const shorter = Math.min(w, h);
-  if (row.length === 0) {
-    _squarifyRecurse(items.slice(1), [items[0]], x, y, w, h, output);
-    return;
+  // 沿較短邊切 row
+  const along = Math.min(w, h);   // row 的「短邊」(高度 if horizontal, 寬度 if vertical)
+  let row = [];
+  let rowSum = 0;
+  let bestWorst = Infinity;
+  let i = 0;
+  // 嘗試一筆一筆加進 row, 看 worst aspect ratio 何時開始變差
+  while (i < items.length) {
+    const candidate = row.concat([items[i]]);
+    const candSum = rowSum + items[i].area;
+    const candWorst = _rowWorst(candidate, candSum, along);
+    if (candWorst <= bestWorst || row.length === 0) {
+      row = candidate;
+      rowSum = candSum;
+      bestWorst = candWorst;
+      i++;
+    } else {
+      break;
+    }
   }
-  const newRow = row.concat([items[0]]);
-  if (_worst(row, shorter) >= _worst(newRow, shorter)) {
-    _squarifyRecurse(items.slice(1), newRow, x, y, w, h, output);
-  } else {
-    const layout = _layoutRow(row, x, y, w, h, output, false);
-    _squarifyRecurse(items, [], layout.x, layout.y, layout.w, layout.h, output);
-  }
-}
-
-function _worst(row, shorter) {
-  if (!row.length) return Infinity;
-  const sum = row.reduce(function(s, it) { return s + it.area; }, 0);
-  let max = -Infinity, min = Infinity;
-  row.forEach(function(it) { if (it.area > max) max = it.area; if (it.area < min) min = it.area; });
-  const s2 = shorter * shorter;
-  const sum2 = sum * sum;
-  return Math.max((s2 * max) / sum2, sum2 / (s2 * min));
-}
-
-function _layoutRow(row, x, y, w, h, output, finalize) {
-  const sum = row.reduce(function(s, it) { return s + it.area; }, 0);
-  const horizontal = w >= h;
-  if (horizontal) {
-    const rh = sum / w;
+  // 把這個 row 鋪到 along 那條邊
+  if (w >= h) {
+    // horizontal mode: row 沿 x 軸鋪, 高度 = rowSum / w
+    const rowH = rowSum / w;
     let cx = x;
     row.forEach(function(it) {
-      const cw = it.area / rh;
-      const target = output.find(function(o) { return o === it.__src; }) || it.__src;
-      target.rect = { x: cx, y: y, w: cw, h: rh };
+      const cw = it.area / rowH;
+      it.rect = { x: cx, y: y, w: cw, h: rowH };
       cx += cw;
     });
-    return { x: x, y: y + rh, w: w, h: h - rh };
+    // 剩餘空間在下方
+    _squarify(items.slice(row.length), x, y + rowH, w, h - rowH);
   } else {
-    const rw = sum / h;
+    // vertical mode: row 沿 y 軸鋪, 寬度 = rowSum / h
+    const rowW = rowSum / h;
     let cy = y;
     row.forEach(function(it) {
-      const ch = it.area / rw;
-      const target = output.find(function(o) { return o === it.__src; }) || it.__src;
-      target.rect = { x: x, y: cy, w: rw, h: ch };
+      const ch = it.area / rowW;
+      it.rect = { x: x, y: cy, w: rowW, h: ch };
       cy += ch;
     });
-    return { x: x + rw, y: y, w: w - rw, h: h };
+    // 剩餘空間在右方
+    _squarify(items.slice(row.length), x + rowW, y, w - rowW, h);
   }
 }
 
-// 主入口: 對 items (含 .value 排序好) 配置 rect
-function treemapLayout(items, w, h) {
-  if (!items.length) return;
-  // 排序 by value desc + 把 src 標好以便回寫
-  items.sort(function(a, b) { return b.value - a.value; });
-  items.forEach(function(it) { it.rect = null; });
-  const sources = items.map(function(it) { return Object.assign(it, { __src: it }); });
-  _treemapSquarify(sources, 0, 0, w, h);
+function _rowWorst(row, sum, along) {
+  if (!row.length || sum <= 0) return Infinity;
+  let max = -Infinity, min = Infinity;
+  row.forEach(function(it) {
+    if (it.area > max) max = it.area;
+    if (it.area < min) min = it.area;
+  });
+  const along2 = along * along;
+  const sum2 = sum * sum;
+  return Math.max((along2 * max) / sum2, sum2 / (along2 * min));
 }
 
 // 變動值 → 顏色 (相對該批最大絕對值正規化)
