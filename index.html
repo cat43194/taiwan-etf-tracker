@@ -1375,7 +1375,9 @@ function renderFlowTable(rows, dir) {
   const newEtfNote = NEW_ETFS.length > 0
     ? '<div class="text-xs text-amber-400 mb-2">⚠️ 已排除新增 ETF (' + NEW_ETFS.join(', ') + ') 首日持股</div>' : '';
   let rowsHtml = '';
+  let cardsHtml = '';
   sorted.forEach(function(r, i) {
+    // 桌機: 表格列
     rowsHtml += '<tr class="hover:bg-slate-800/30">'
       + '<td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td>'
       + '<td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">'
@@ -1387,11 +1389,34 @@ function renderFlowTable(rows, dir) {
       + '<td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td>'
       + '<td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td>'
       + '</tr>';
+    // 手機: 卡片
+    const sign = r.diff > 0 ? '+' : '';
+    const vSign = (r.diff_value != null && r.diff_value > 0) ? '+' : '';
+    cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')">'
+      + '<div class="flex items-start justify-between gap-2 mb-2">'
+      + '<div class="min-w-0 flex-1">'
+      + '<div class="flex items-baseline gap-2 flex-wrap">'
+      + '<span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span>'
+      + '<span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span>'
+      + '<span class="text-xs text-slate-500">' + esc(r.code) + '</span>'
+      + '</div>'
+      + '<div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有' + (r.has_new_etf ? ' <span class="text-amber-400">(含新)</span>' : '') + '</div>'
+      + '</div>'
+      + '<div class="text-right flex-shrink-0">'
+      + '<div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + sign + fmt(r.diff) + '</div>'
+      + '<div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? vSign + fmtM(r.diff_value) : '-') + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">'
+      + '<div><div class="text-slate-500 mb-0.5">昨日</div><div class="num text-slate-300">' + fmt(r.prev_lots) + ' 張</div></div>'
+      + '<div><div class="text-slate-500 mb-0.5">今日</div><div class="num text-slate-100 font-semibold">' + fmt(r.today_lots) + ' 張</div></div>'
+      + '</div>'
+      + '</div>';
   });
   return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">' + label + ' TOP ' + TOP_N_FLOW + ' <span class="text-xs text-slate-500 font-normal">(單位:張)</span></h2>'
     + newEtfNote
-    + '<div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看持有 ETF · 點擊欄位標題排序</div>'
-    + '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
+    + '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div>'
+    + '<div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
     + '<table class="w-full text-sm">'
     + '<thead class="bg-slate-800/50 text-slate-400 text-xs"><tr>'
     + '<th class="px-2 py-2 text-left">#</th>'
@@ -1402,7 +1427,8 @@ function renderFlowTable(rows, dir) {
     + thFlow('變動金額', 'diff_value')
     + '</tr></thead>'
     + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
-    + '</table></div>';
+    + '</table></div>'
+    + '<div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
 }
 
 function renderMV(rows, total, prevMvRank) {
@@ -1620,10 +1646,12 @@ function renderMultiTable(rows, dir) {
     return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleMultiSort(\'' + key + '\')">' + esc(lab) + sortIcon(multiSort, key) + '</th>';
   }
   let rowsHtml = '';
+  let cardsHtml = '';
   sorted.forEach(function(r, i) {
     const tag = r.is_new
       ? '<span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 rounded ml-1">NEW</span>'
       : (r.is_cleared ? '<span class="text-[10px] bg-slate-700 text-slate-300 px-1 rounded ml-1">出清</span>' : '');
+    // 桌機: 表格列
     rowsHtml += '<tr class="hover:bg-slate-800/30">'
       + '<td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td>'
       + '<td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">'
@@ -1635,9 +1663,32 @@ function renderMultiTable(rows, dir) {
       + '<td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td>'
       + '<td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td>'
       + '</tr>';
+    // 手機: 卡片
+    const sign = r.diff > 0 ? '+' : '';
+    const vSign = (r.diff_value != null && r.diff_value > 0) ? '+' : '';
+    cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')">'
+      + '<div class="flex items-start justify-between gap-2 mb-2">'
+      + '<div class="min-w-0 flex-1">'
+      + '<div class="flex items-baseline gap-2 flex-wrap">'
+      + '<span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span>'
+      + '<span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span>' + tag
+      + '<span class="text-xs text-slate-500">' + esc(r.code) + '</span>'
+      + '</div>'
+      + '<div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有</div>'
+      + '</div>'
+      + '<div class="text-right flex-shrink-0">'
+      + '<div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + sign + fmt(r.diff) + '</div>'
+      + '<div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? vSign + fmtM(r.diff_value) : '-') + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">'
+      + '<div><div class="text-slate-500 mb-0.5">起日</div><div class="num text-slate-300">' + fmt(r.start_lots) + ' 張</div></div>'
+      + '<div><div class="text-slate-500 mb-0.5">迄日</div><div class="num text-slate-100 font-semibold">' + fmt(r.end_lots) + ' 張</div></div>'
+      + '</div>'
+      + '</div>';
   });
-  return '<div class="text-xs text-slate-500 mb-3">💡 點擊股票名稱查看持有 ETF · 點擊欄位標題排序</div>'
-    + '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
+  return '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div>'
+    + '<div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
     + '<table class="w-full text-sm">'
     + '<thead class="bg-slate-800/50 text-slate-400 text-xs"><tr>'
     + '<th class="px-2 py-2 text-left">#</th>'
@@ -1648,7 +1699,8 @@ function renderMultiTable(rows, dir) {
     + thMu('變動金額', 'diff_value')
     + '</tr></thead>'
     + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
-    + '</table></div>';
+    + '</table></div>'
+    + '<div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
 }
 
 function renderETF() {
@@ -1912,7 +1964,6 @@ function renderETF() {
 
   return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">ETF 明細</h2>'
     + '<div class="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 mb-3">' + etfBtnsHtml + '</div>'
-    + groupShortcutsHtml
     + multiHintHtml
     + bodyHtml;
 }
