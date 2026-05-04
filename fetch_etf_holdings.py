@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v10:
+v11:
+ - 🆕 出清股票補抓: 把「前日有持股、今日已出清」的股票也加進收盤價抓取清單
+   (修復: 全面出清的股票在前端「變動金額」會顯示 -, 因為沒抓收盤價)
  - 失敗 ETF 單獨重試 (最多 2 輪, 每輪間隔 15 秒)
  - 用 MoneyDJ 的 holdings_date 眾數當檔名日期, 避免 cron 延遲跨日
  - 防呆: holdings_date 全 None / 未開盤日 / ETF 數量異常
@@ -469,7 +471,7 @@ def main():
 
     # 初始 today_date 用系統時間 (後面會被 MoneyDJ 的 holdings_date 覆蓋)
     today_date = datetime.now().strftime("%Y-%m-%d")
-    print(f"\n=== 台股主動式ETF 追蹤器 (系統時間: {today_date}) ===\n", flush=True)
+    print(f"\n=== 台股主動式ETF 追蹤器 v11 (系統時間: {today_date}) ===\n", flush=True)
 
     prev_date, prev_snapshot = find_prev_snapshot(out_dir, today_date)
     if prev_snapshot:
@@ -653,6 +655,26 @@ def main():
         print(f"  -> 為避免污染 latest.json, 本次不寫檔")
         print(f"{'='*60}\n")
         return
+
+    # ========================================================
+    # 🆕 v11: 出清股票補抓
+    # 把「前日有持股、今日已出清」的股票也加進收盤價抓取清單
+    # 修復: 全面出清的股票在前端「變動金額」會顯示 -, 因為沒抓收盤價
+    # ========================================================
+    today_only_count = len(all_stock_codes)
+    if prev_snapshot:
+        prev_today = prev_snapshot.get("today", {}) or {}
+        prev_stock_codes = set()
+        for etf_code, etf_data in prev_today.items():
+            for h in (etf_data.get("holdings") or []):
+                prev_stock_codes.add(h["code"])
+        added_for_clearance = prev_stock_codes - all_stock_codes
+        all_stock_codes.update(prev_stock_codes)
+        if added_for_clearance:
+            print(f"\n  📦 出清股票補抓: 加入前日有持股、今日已全部出清的 {len(added_for_clearance)} 檔")
+            print(f"     (今日持股 {today_only_count} 檔 + 補抓 {len(added_for_clearance)} 檔 = 共 {len(all_stock_codes)} 檔需抓收盤價)")
+            sample = sorted(added_for_clearance)[:10]
+            print(f"     範例: {', '.join(sample)}{' ...' if len(added_for_clearance) > 10 else ''}")
 
     # ========================================================
     # 抓收盤價
