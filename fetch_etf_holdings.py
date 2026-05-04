@@ -25,7 +25,7 @@ from bs4 import BeautifulSoup
 ETFS = [
     "00980A", "00981A", "00982A", "00984A", "00985A",
     "00987A", "00991A", "00992A", "00993A", "00994A",
-    "00995A", "00996A", "00400A", "00401A",
+    "00995A", "00996A", "00400A", "00401A", "00999A",
 ]
 
 MONEYDJ_URL = "https://www.moneydj.com/ETF/X/Basic/Basic0007B.xdjhtm?etfid={code}.TW"
