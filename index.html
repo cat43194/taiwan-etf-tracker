@@ -58,11 +58,9 @@
       <button id="pwd-submit" class="w-full mt-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-semibold py-3 rounded-lg transition shadow-lg">
         登入
       </button>
-      <div id="pwd-error" class="hidden mt-3 text-center text-sm text-rose-400">❌ 密碼錯誤,請再試一次</div>
+      <div id="pwd-error" class="hidden mt-3 text-center text-sm text-rose-400">❌ 密碼錯誤，請再試一次</div>
     </div>
-    <div class="text-center mt-6 text-xs text-slate-600">
-      © 2026 · 密碼請洽授權窗口
-    </div>
+    <div class="text-center mt-6 text-xs text-slate-600">© 2026 · 密碼請洽授權窗口</div>
   </div>
 </div>
 
@@ -86,7 +84,7 @@
     <button data-tab="overview" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">總覽</button>
     <button data-tab="buy" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">買超 TOP 20</button>
     <button data-tab="sell" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">賣超 TOP 20</button>
-    <button data-tab="multi" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">多期間買賣超</button>
+    <button data-tab="multi" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">區間查詢</button>
     <button data-tab="mv" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">市值 TOP 50</button>
     <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
@@ -103,35 +101,23 @@
 </div>
 
 <footer class="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-slate-500 border-t border-slate-800 mt-10">
-  因各投信網站更新時間不同,每日 22:00 後自動更新 請耐心等待 僅供參考不構成投資建議 謝謝
+  因各投信網站更新時間不同，每日 22:00 後自動更新 請耐心等待 僅供參考不構成投資建議 謝謝
 </footer>
 
 </div>
 
 <script>
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🎯 ETF 元資料 (投信家族 + 規模分組)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🔧 未來新增 ETF 如何加入追蹤?
-//   1. 在 Python 爬蟲腳本的 ETFS = [...] 陣列加入新代號
-//   2. 在下方 ETF_META 表加入新代號 + 投信 + 規模分類
-//      (規模分類定期檢視,例如: 半年重新排序一次)
-//   3. 下次 GitHub Action 跑就會自動納入,首日標示「新」徽章
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const ETF_META = {
-  // ━━━━ 🥇 Top 5(規模/人氣領先)━━━━
   '00981A': { name: '主動統一台股增長',   issuer: '統一', size: 'top5' },
   '00994A': { name: '主動第一金台股優',   issuer: '第一金', size: 'top5' },
   '00992A': { name: '主動群益科技創新',   issuer: '群益', size: 'top5' },
   '00982A': { name: '主動群益台灣強棒',   issuer: '群益', size: 'top5' },
   '00985A': { name: '主動野村台灣50',     issuer: '野村', size: 'top5' },
-  // ━━━━ 🥈 Mid 5(中型主力)━━━━
   '00980A': { name: '主動野村臺灣優選',   issuer: '野村', size: 'mid5' },
   '00991A': { name: '主動復華未來50',     issuer: '復華', size: 'mid5' },
   '00987A': { name: '主動台新優勢成長',   issuer: '台新', size: 'mid5' },
   '00995A': { name: '主動中信台灣卓越',   issuer: '中信', size: 'mid5' },
   '00984A': { name: '主動安聯台灣高息',   issuer: '安聯', size: 'mid5' },
-  // ━━━━ 🥉 Bottom(2026 新生代)━━━━
   '00993A': { name: '主動安聯台灣',       issuer: '安聯', size: 'bottom4' },
   '00996A': { name: '主動兆豐台灣豐收',   issuer: '兆豐', size: 'bottom4' },
   '00400A': { name: '主動國泰動能高息',   issuer: '國泰', size: 'bottom4' },
@@ -139,38 +125,13 @@ const ETF_META = {
   '00999A': { name: '主動野村台灣高息',   issuer: '野村', size: 'bottom4' },
 };
 
-const SIZE_LABELS = {
-  top5:    { label: '🥇 Top 5',    desc: '規模/人氣領先' },
-  mid5:    { label: '🥈 Mid 5',    desc: '中型主力' },
-  bottom4: { label: '🥉 Bottom 4', desc: '2026 新生代' },
-};
+const SIGNAL_THRESHOLDS = { consensusEtfCount: 3, newEtfCount: 2, largeAmountTopN: 3, maxSignals: 5 };
 
-const SIGNAL_THRESHOLDS = {
-  consensusEtfCount: 3,
-  newEtfCount: 2,
-  largeAmountTopN: 3,
-  maxSignals: 5,
-};
+function getEtfsBySize(size) { return Object.keys(ETF_META).filter(k => ETF_META[k].size === size); }
+function getEtfsByIssuer(issuer) { return Object.keys(ETF_META).filter(k => ETF_META[k].issuer === issuer); }
 
-function getEtfsBySize(size) {
-  return Object.keys(ETF_META).filter(function(k) { return ETF_META[k].size === size; });
-}
-function getEtfsByIssuer(issuer) {
-  return Object.keys(ETF_META).filter(function(k) { return ETF_META[k].issuer === issuer; });
-}
-function getMultiIssuers() {
-  const counts = {};
-  Object.values(ETF_META).forEach(function(m) { counts[m.issuer] = (counts[m.issuer] || 0) + 1; });
-  return Object.keys(counts).filter(function(k) { return counts[k] >= 2; })
-    .sort(function(a, b) { return counts[b] - counts[a]; });
-}
-
-const VALID_PASSWORDS = [
-  "RVRGLTQzMTk0",
-  "RVRGLTIwMjZBY3RpdmU=",
-];
+const VALID_PASSWORDS = ["RVRGLTQzMTk0","RVRGLTIwMjZBY3RpdmU="];
 const AUTH_KEY = 'etf_tracker_auth_v1';
-
 function checkAuth() {
   const saved = localStorage.getItem(AUTH_KEY);
   if (saved && VALID_PASSWORDS.includes(saved)) { showMainSite(); return true; }
@@ -182,10 +143,8 @@ function showMainSite() {
   loadData();
 }
 function logout() { localStorage.removeItem(AUTH_KEY); location.reload(); }
-
 document.getElementById('pwd-submit').addEventListener('click', tryLogin);
 document.getElementById('pwd-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
-
 function tryLogin() {
   const input = document.getElementById('pwd-input').value;
   const encoded = btoa(input);
@@ -201,47 +160,26 @@ function tryLogin() {
 setTimeout(() => { const inp = document.getElementById('pwd-input'); if (inp) inp.focus(); }, 100);
 if (!checkAuth()) {}
 
-const TOP_N_MV = 50;
-const TOP_N_FLOW = 20;
-const TOP_N_OVERVIEW = 20;
-const MULTI_TOP_N = 20;
+const TOP_N_MV = 50, TOP_N_FLOW = 20, TOP_N_OVERVIEW = 20, MULTI_TOP_N = 20;
 let DATA = null, currentTab = 'overview', selectedEtf = null, stockSearch = '', selectedStock = null, modalStock = null;
 let NEW_ETFS = [];
-let selectedEtfMulti = null;
-let etfMultiSelectMode = false;
+let selectedEtfMulti = null, etfMultiSelectMode = false;
+let HISTORY_DATES = null, HISTORY_CACHE = {};
+let multiPreset = '5d', multiStartDate = null, multiEndDate = null;
+let multiSubTab = 'buy', multiLoading = false, multiSort = { key: null, dir: null };
 
-let HISTORY_DATES = null;
-let HISTORY_CACHE = {};
-let multiPreset = '5d';
-let multiStartDate = null;
-let multiEndDate = null;
-let multiSubTab = 'buy';
-let multiLoading = false;
-let multiSort = { key: null, dir: null };
+// 個股查詢狀態
+let stockQueryDate = null, stockQueryLoading = false;
+let stockQueryEtfFilter = null;        // null=全部, string=單檔, array=多選
+let stockQueryMultiSelectMode = false; // 是否在多選模式中
+let stockQueryCustomSelected = [];     // 多選模式中暫存的選擇
+let stockQueryCustomMode = false;      // 舊版相容，不再使用
 
-let stockQueryDate = null;
-let stockQueryLoading = false;
-let stockQueryEtfFilter = null;
-let stockQueryCustomMode = false;
-let stockQueryCustomSelected = [];
-
-let historyModalEtf = null;
-let historyModalStock = null;
-let historyModalLoading = false;
-
-let stockModalTab = 'holdings';
-let stockModalHistoryEtf = null;
-let stockModalHistoryLoading = false;
-let stockModalCustomMode = false;
-let stockModalCustomSelected = [];
-
-let mvSort = { key: null, dir: null };
-let etfSort = { key: null, dir: null };
+let historyModalEtf = null, historyModalStock = null, historyModalLoading = false;
+let stockModalTab = 'holdings', stockModalHistoryEtf = null, stockModalHistoryLoading = false;
+let stockModalCustomMode = false, stockModalCustomSelected = [];
+let mvSort = { key: null, dir: null }, etfSort = { key: null, dir: null };
 let flowSort = { buy: { key: null, dir: null }, sell: { key: null, dir: null } };
-
-let heatmapEtfCode = null;
-let heatmapColorBy = 'lots_diff';
-let heatmapLoading = false;
 
 function fmt(n, d) {
   d = d || 0;
@@ -256,14 +194,8 @@ function fmtM(n) {
 }
 function esc(s) {
   if (s == null) return '';
-  return String(s)
-    .split('&').join('&amp;')
-    .split('<').join('&lt;')
-    .split('>').join('&gt;')
-    .split('"').join('&quot;')
-    .split("'").join('&#39;');
+  return String(s).split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;').split('"').join('&quot;').split("'").join('&#39;');
 }
-
 function rankChangeHtml(todayRank, prevRank) {
   if (prevRank == null) return '<span class="text-amber-400 text-xs font-semibold ml-1">NEW</span>';
   const diff = prevRank - todayRank;
@@ -271,7 +203,6 @@ function rankChangeHtml(todayRank, prevRank) {
   if (diff < 0) return '<span class="text-emerald-400 text-xs ml-1">↓' + Math.abs(diff) + '</span>';
   return '<span class="text-slate-500 text-xs ml-1">—</span>';
 }
-
 function cycleSort(current, key) {
   if (current.key !== key) return { key: key, dir: 'desc' };
   if (current.dir === 'desc') return { key: key, dir: 'asc' };
@@ -303,35 +234,17 @@ function toggleMultiSort(key) { multiSort = cycleSort(multiSort, key); render();
 
 function computeConcentration(holdings) {
   if (!holdings || !holdings.length) return null;
-  const totalLots = holdings.reduce(function(s, h) { return s + (h.lots || 0); }, 0);
+  const totalLots = holdings.reduce((s, h) => s + (h.lots || 0), 0);
   if (!totalLots) return null;
-  const sorted = [...holdings].sort(function(a, b) { return (b.lots || 0) - (a.lots || 0); });
-  const top10Lots = sorted.slice(0, 10).reduce(function(s, h) { return s + (h.lots || 0); }, 0);
+  const sorted = [...holdings].sort((a, b) => (b.lots || 0) - (a.lots || 0));
+  const top10Lots = sorted.slice(0, 10).reduce((s, h) => s + (h.lots || 0), 0);
   const top10Pct = (top10Lots / totalLots) * 100;
-  const hhi = sorted.reduce(function(s, h) {
-    const pct = (h.lots / totalLots) * 100;
-    return s + pct * pct;
-  }, 0);
+  const hhi = sorted.reduce((s, h) => { const pct = (h.lots / totalLots) * 100; return s + pct * pct; }, 0);
   let level, color;
-  if (hhi < 1500) { level = '分散';     color = 'emerald'; }
+  if (hhi < 1500) { level = '分散'; color = 'emerald'; }
   else if (hhi < 2500) { level = '中度集中'; color = 'amber'; }
   else { level = '高度集中'; color = 'rose'; }
-  return { top10Pct: top10Pct, hhi: hhi, count: holdings.length, level: level, color: color };
-}
-
-function renderConcentrationBadge(conc) {
-  if (!conc) return '';
-  const colorCls = {
-    emerald: 'bg-emerald-950/50 text-emerald-300 border-emerald-700/50',
-    amber:   'bg-amber-950/50 text-amber-300 border-amber-700/50',
-    rose:    'bg-rose-950/50 text-rose-300 border-rose-700/50',
-  }[conc.color];
-  return '<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border ' + colorCls + '" '
-    + 'title="HHI ' + Math.round(conc.hhi) + ' (Herfindahl 集中度指數,< 1500 分散、1500-2500 中度、> 2500 高度集中)">'
-    + '🎯 ' + conc.level
-    + ' <span class="opacity-70">· HHI ' + Math.round(conc.hhi) + '</span>'
-    + ' <span class="opacity-70">· Top10 ' + conc.top10Pct.toFixed(1) + '%</span>'
-    + '</span>';
+  return { top10Pct, hhi, count: holdings.length, level, color };
 }
 
 function generateDailySignals(todayAgg, prevAgg, newEtfs) {
@@ -339,131 +252,72 @@ function generateDailySignals(todayAgg, prevAgg, newEtfs) {
   if (!DATA || !DATA.prev) return signals;
   const stockChangeMap = {};
   Object.values(todayAgg).forEach(function(s) {
-    let etfsBuying = [], etfsSelling = [], etfsNew = [];
+    let etfsBuying = [], etfsSelling = [];
     s.etfs.forEach(function(e) {
       if (newEtfs.indexOf(e.etf) !== -1) return;
       const prevEtfHoldings = (DATA.prev && DATA.prev[e.etf] && DATA.prev[e.etf].holdings) || [];
-      const prevHolding = prevEtfHoldings.find(function(h) { return h.code === s.code; });
+      const prevHolding = prevEtfHoldings.find(h => h.code === s.code);
       const prevLots = prevHolding ? prevHolding.lots : 0;
       const diff = e.lots - prevLots;
       const isFirstDay = !prevHolding && e.lots > 0;
-      if (diff > 0) {
-        etfsBuying.push({ etf: e.etf, etfName: e.etf_name, diff: diff, lots: e.lots, isFirstDay: isFirstDay });
-      } else if (diff < 0) {
-        etfsSelling.push({ etf: e.etf, etfName: e.etf_name, diff: diff, lots: e.lots });
-      }
+      if (diff > 0) etfsBuying.push({ etf: e.etf, etfName: e.etf_name, diff, lots: e.lots, isFirstDay });
+      else if (diff < 0) etfsSelling.push({ etf: e.etf, etfName: e.etf_name, diff, lots: e.lots });
     });
     if (etfsBuying.length || etfsSelling.length) {
-      const netDiff = etfsBuying.reduce(function(sum, e) { return sum + e.diff; }, 0)
-                    + etfsSelling.reduce(function(sum, e) { return sum + e.diff; }, 0);
-      stockChangeMap[s.code] = {
-        code: s.code, name: s.name, price: s.price,
-        etfsBuying: etfsBuying, etfsSelling: etfsSelling,
-        netDiff: netDiff,
-      };
+      const netDiff = etfsBuying.reduce((sum, e) => sum + e.diff, 0) + etfsSelling.reduce((sum, e) => sum + e.diff, 0);
+      stockChangeMap[s.code] = { code: s.code, name: s.name, price: s.price, etfsBuying, etfsSelling, netDiff };
     }
   });
-
   Object.values(stockChangeMap).forEach(function(s) {
     if (s.etfsBuying.length >= SIGNAL_THRESHOLDS.consensusEtfCount) {
-      const totalDiff = s.etfsBuying.reduce(function(sum, e) { return sum + e.diff; }, 0);
-      signals.push({
-        type: 'consensus_buy',
-        priority: 200 + s.etfsBuying.length * 10,
-        icon: '🎯',
-        color: 'emerald',
-        text: '<b>' + esc(s.name) + '</b> (' + esc(s.code) + ') 今日共 <b class="text-emerald-300">' + s.etfsBuying.length + ' 檔 ETF 同步加碼</b>,合計 <b>+' + fmt(totalDiff) + '</b> 張',
-        stock: s.code,
-      });
+      const totalDiff = s.etfsBuying.reduce((sum, e) => sum + e.diff, 0);
+      signals.push({ type: 'consensus_buy', priority: 200 + s.etfsBuying.length * 10, icon: '🎯', color: 'emerald',
+        text: '<b>' + esc(s.name) + '</b> (' + esc(s.code) + ') 今日共 <b class="text-emerald-300">' + s.etfsBuying.length + ' 檔 ETF 同步加碼</b>，合計 <b>+' + fmt(totalDiff) + '</b> 張', stock: s.code });
     }
     if (s.etfsSelling.length >= SIGNAL_THRESHOLDS.consensusEtfCount) {
-      const totalDiff = s.etfsSelling.reduce(function(sum, e) { return sum + e.diff; }, 0);
-      signals.push({
-        type: 'consensus_sell',
-        priority: 200 + s.etfsSelling.length * 10,
-        icon: '⚠️',
-        color: 'rose',
-        text: '<b>' + esc(s.name) + '</b> (' + esc(s.code) + ') 今日共 <b class="text-rose-300">' + s.etfsSelling.length + ' 檔 ETF 同步減碼</b>,合計 <b>' + fmt(totalDiff) + '</b> 張',
-        stock: s.code,
-      });
+      const totalDiff = s.etfsSelling.reduce((sum, e) => sum + e.diff, 0);
+      signals.push({ type: 'consensus_sell', priority: 200 + s.etfsSelling.length * 10, icon: '⚠️', color: 'rose',
+        text: '<b>' + esc(s.name) + '</b> (' + esc(s.code) + ') 今日共 <b class="text-rose-300">' + s.etfsSelling.length + ' 檔 ETF 同步減碼</b>，合計 <b>' + fmt(totalDiff) + '</b> 張', stock: s.code });
     }
   });
-
   Object.values(stockChangeMap).forEach(function(s) {
-    const newEntries = s.etfsBuying.filter(function(e) { return e.isFirstDay; });
+    const newEntries = s.etfsBuying.filter(e => e.isFirstDay);
     if (newEntries.length >= SIGNAL_THRESHOLDS.newEtfCount) {
-      const totalLots = newEntries.reduce(function(sum, e) { return sum + e.lots; }, 0);
-      signals.push({
-        type: 'new_entry',
-        priority: 150 + newEntries.length * 5,
-        icon: '🆕',
-        color: 'sky',
-        text: '<b>' + esc(s.name) + '</b> (' + esc(s.code) + ') 今日 <b class="text-sky-300">' + newEntries.length + ' 檔 ETF 新進持股</b> (+' + fmt(totalLots) + ' 張)',
-        stock: s.code,
-      });
+      const totalLots = newEntries.reduce((sum, e) => sum + e.lots, 0);
+      signals.push({ type: 'new_entry', priority: 150 + newEntries.length * 5, icon: '🆕', color: 'sky',
+        text: '<b>' + esc(s.name) + '</b> (' + esc(s.code) + ') 今日 <b class="text-sky-300">' + newEntries.length + ' 檔 ETF 新進持股</b> (+' + fmt(totalLots) + ' 張)', stock: s.code });
     }
   });
-
   const sortedByValue = Object.values(stockChangeMap)
-    .filter(function(s) { return s.price && s.netDiff !== 0; })
-    .map(function(s) { return Object.assign({}, s, { valueChange: s.netDiff * 1000 * s.price }); })
-    .sort(function(a, b) { return Math.abs(b.valueChange) - Math.abs(a.valueChange); })
+    .filter(s => s.price && s.netDiff !== 0)
+    .map(s => Object.assign({}, s, { valueChange: s.netDiff * 1000 * s.price }))
+    .sort((a, b) => Math.abs(b.valueChange) - Math.abs(a.valueChange))
     .slice(0, SIGNAL_THRESHOLDS.largeAmountTopN);
-
   sortedByValue.forEach(function(s, i) {
     const dir = s.netDiff > 0 ? '加碼' : '減碼';
     const sign = s.netDiff > 0 ? '+' : '';
     const valueSign = s.valueChange > 0 ? '+' : '';
-    signals.push({
-      type: 'large_amount',
-      priority: 100 - i * 10,
-      icon: '💥',
-      color: s.netDiff > 0 ? 'emerald' : 'rose',
-      text: '<b>' + esc(s.name) + '</b> (' + esc(s.code) + ') 大額' + dir + ' <b>' + sign + fmt(s.netDiff) + '</b> 張 <span class="opacity-80">(變動金額 ' + valueSign + fmtM(s.valueChange) + ')</span>',
-      stock: s.code,
-    });
+    signals.push({ type: 'large_amount', priority: 100 - i * 10, icon: '💥', color: s.netDiff > 0 ? 'emerald' : 'rose',
+      text: '<b>' + esc(s.name) + '</b> (' + esc(s.code) + ') 大額' + dir + ' <b>' + sign + fmt(s.netDiff) + '</b> 張 <span class="opacity-80">(變動金額 ' + valueSign + fmtM(s.valueChange) + ')</span>', stock: s.code });
   });
-
-  signals.sort(function(a, b) { return b.priority - a.priority; });
-  const seen = new Set();
-  const dedupe = [];
-  signals.forEach(function(sig) {
-    if (sig.stock && seen.has(sig.stock)) return;
-    if (sig.stock) seen.add(sig.stock);
-    dedupe.push(sig);
-  });
+  signals.sort((a, b) => b.priority - a.priority);
+  const seen = new Set(), dedupe = [];
+  signals.forEach(sig => { if (sig.stock && seen.has(sig.stock)) return; if (sig.stock) seen.add(sig.stock); dedupe.push(sig); });
   return dedupe.slice(0, SIGNAL_THRESHOLDS.maxSignals);
 }
 
 function renderSignalBanner(signals) {
   if (!signals || !signals.length) {
-    return '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 mb-4 sm:mb-5 text-center text-xs text-slate-500">'
-      + '📡 今日無重點訊號 — 沒有 ≥' + SIGNAL_THRESHOLDS.consensusEtfCount + ' 檔 ETF 同步動作的個股,持股變化偏分散'
-      + '</div>';
+    return '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 mb-4 sm:mb-5 text-center text-xs text-slate-500">📡 今日無重點訊號 — 沒有 ≥' + SIGNAL_THRESHOLDS.consensusEtfCount + ' 檔 ETF 同步動作的個股，持股變化偏分散</div>';
   }
-  const colorMap = {
-    emerald: 'border-l-emerald-500 bg-emerald-950/20 hover:bg-emerald-950/40',
-    rose:    'border-l-rose-500 bg-rose-950/20 hover:bg-rose-950/40',
-    sky:     'border-l-sky-500 bg-sky-950/20 hover:bg-sky-950/40',
-    amber:   'border-l-amber-500 bg-amber-950/20 hover:bg-amber-950/40',
-  };
+  const colorMap = { emerald: 'border-l-emerald-500 bg-emerald-950/20 hover:bg-emerald-950/40', rose: 'border-l-rose-500 bg-rose-950/20 hover:bg-rose-950/40', sky: 'border-l-sky-500 bg-sky-950/20 hover:bg-sky-950/40', amber: 'border-l-amber-500 bg-amber-950/20 hover:bg-amber-950/40' };
   let signalRows = '';
   signals.forEach(function(sig) {
     const cls = colorMap[sig.color] || colorMap.amber;
     const clickHandler = sig.stock ? 'onclick="openStockModal(\'' + esc(sig.stock) + '\')"' : '';
-    const cursorCls = sig.stock ? 'cursor-pointer' : '';
-    signalRows += '<div ' + clickHandler + ' class="px-3 py-2 border-l-4 ' + cls + ' ' + cursorCls + ' transition flex items-start gap-2">'
-      + '<span class="text-base sm:text-lg flex-shrink-0">' + sig.icon + '</span>'
-      + '<span class="text-xs sm:text-sm flex-1 leading-relaxed text-slate-200">' + sig.text + '</span>'
-      + '</div>';
+    signalRows += '<div ' + clickHandler + ' class="px-3 py-2 border-l-4 ' + cls + ' ' + (sig.stock ? 'cursor-pointer' : '') + ' transition flex items-start gap-2"><span class="text-base sm:text-lg flex-shrink-0">' + sig.icon + '</span><span class="text-xs sm:text-sm flex-1 leading-relaxed text-slate-200">' + sig.text + '</span></div>';
   });
-  return '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden mb-4 sm:mb-5">'
-    + '<div class="px-4 py-2 bg-gradient-to-r from-amber-500/20 via-rose-500/10 to-transparent border-b border-slate-800 text-sm font-semibold flex items-center justify-between flex-wrap gap-2">'
-    + '<span class="text-amber-300">📡 今日重點訊號 <span class="text-xs text-slate-400 font-normal">(自動偵測 ≥' + SIGNAL_THRESHOLDS.consensusEtfCount + ' 檔同向 + 大額異動)</span></span>'
-    + '<span class="text-xs text-slate-500">點任一條跳到個股詳情 →</span>'
-    + '</div>'
-    + '<div class="divide-y divide-slate-800">' + signalRows + '</div>'
-    + '</div>';
+  return '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden mb-4 sm:mb-5"><div class="px-4 py-2 bg-gradient-to-r from-amber-500/20 via-rose-500/10 to-transparent border-b border-slate-800 text-sm font-semibold flex items-center justify-between flex-wrap gap-2"><span class="text-amber-300">📡 今日重點訊號 <span class="text-xs text-slate-400 font-normal">(自動偵測 ≥' + SIGNAL_THRESHOLDS.consensusEtfCount + ' 檔同向 + 大額異動)</span></span><span class="text-xs text-slate-500">點任一條跳到個股詳情 →</span></div><div class="divide-y divide-slate-800">' + signalRows + '</div></div>';
 }
 
 async function discoverHistoryDates() {
@@ -475,39 +329,20 @@ async function discoverHistoryDates() {
   const todayObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
   dates.push(todayStr);
   HISTORY_CACHE[todayStr] = { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date };
-
   function formatLocalDate(d) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
     return y + '-' + m + '-' + day;
   }
-
   const probes = [];
   for (let i = 1; i <= 90; i++) {
-    const d = new Date(todayObj);
-    d.setDate(d.getDate() - i);
-    probes.push(formatLocalDate(d));
+    const d = new Date(todayObj); d.setDate(d.getDate() - i); probes.push(formatLocalDate(d));
   }
-
-  const results = await Promise.allSettled(
-    probes.map(function(ds) {
-      return fetch('./snapshots/snapshot-' + ds + '.json?t=' + Date.now())
-        .then(function(r) { return r.ok ? r.json().then(function(j) { return { ds: ds, j: j }; }) : null; })
-        .catch(function() { return null; });
-    })
-  );
-
-  results.forEach(function(r) {
-    if (r.status === 'fulfilled' && r.value) {
-      const ds = r.value.ds;
-      const j = r.value.j;
-      dates.push(ds);
-      HISTORY_CACHE[ds] = j;
-    }
-  });
-
-  dates.sort(function(a, b) { return b.localeCompare(a); });
+  const results = await Promise.allSettled(probes.map(ds =>
+    fetch('./snapshots/snapshot-' + ds + '.json?t=' + Date.now())
+      .then(r => r.ok ? r.json().then(j => ({ ds, j })) : null).catch(() => null)
+  ));
+  results.forEach(r => { if (r.status === 'fulfilled' && r.value) { dates.push(r.value.ds); HISTORY_CACHE[r.value.ds] = r.value.j; } });
+  dates.sort((a, b) => b.localeCompare(a));
   HISTORY_DATES = [...new Set(dates)];
   return HISTORY_DATES;
 }
@@ -517,12 +352,9 @@ function getStartDateByOffset(n) {
   if (n >= HISTORY_DATES.length) return HISTORY_DATES[HISTORY_DATES.length - 1];
   return HISTORY_DATES[n];
 }
-
 function snapToHistoryDate(targetDate) {
   if (!HISTORY_DATES || HISTORY_DATES.length === 0) return null;
-  for (let i = 0; i < HISTORY_DATES.length; i++) {
-    if (HISTORY_DATES[i] <= targetDate) return HISTORY_DATES[i];
-  }
+  for (let i = 0; i < HISTORY_DATES.length; i++) { if (HISTORY_DATES[i] <= targetDate) return HISTORY_DATES[i]; }
   return HISTORY_DATES[HISTORY_DATES.length - 1];
 }
 
@@ -534,21 +366,11 @@ function computeMultiFlow(startSnap, endSnap, prices) {
   const flows = [];
   keys.forEach(function(code) {
     const s = startAgg[code], e = endAgg[code];
-    const start_lots = s ? s.total_lots : 0;
-    const end_lots = e ? e.total_lots : 0;
-    const diff = end_lots - start_lots;
-    const price = prices[code] != null ? prices[code] : null;
-    const name = (e && e.name) || (s && s.name) || code;
-    const etf_count = e ? e.etf_count : 0;
-    flows.push({
-      code: code, name: name,
-      start_lots: start_lots, end_lots: end_lots, diff: diff,
-      price: price,
-      diff_value: price ? diff * 1000 * price : null,
-      etf_count: etf_count,
-      is_new: start_lots === 0 && end_lots > 0,
-      is_cleared: start_lots > 0 && end_lots === 0,
-    });
+    const start_lots = s ? s.total_lots : 0, end_lots = e ? e.total_lots : 0;
+    const diff = end_lots - start_lots, price = prices[code] != null ? prices[code] : null;
+    flows.push({ code, name: (e && e.name) || (s && s.name) || code, start_lots, end_lots, diff, price,
+      diff_value: price ? diff * 1000 * price : null, etf_count: e ? e.etf_count : 0,
+      is_new: start_lots === 0 && end_lots > 0, is_cleared: start_lots > 0 && end_lots === 0 });
   });
   return flows;
 }
@@ -557,18 +379,11 @@ async function changeMultiPreset(preset) {
   multiPreset = preset;
   multiSort = { key: null, dir: null };
   if (preset !== 'custom') {
-    multiLoading = true;
-    render();
+    multiLoading = true; render();
     await discoverHistoryDates();
-    multiLoading = false;
-    render();
+    multiLoading = false; render();
   } else {
-    if (!HISTORY_DATES) {
-      multiLoading = true;
-      render();
-      await discoverHistoryDates();
-      multiLoading = false;
-    }
+    if (!HISTORY_DATES) { multiLoading = true; render(); await discoverHistoryDates(); multiLoading = false; }
     if (HISTORY_DATES && HISTORY_DATES.length >= 2) {
       multiEndDate = multiEndDate || HISTORY_DATES[0];
       multiStartDate = multiStartDate || HISTORY_DATES[Math.min(HISTORY_DATES.length - 1, 5)];
@@ -576,696 +391,314 @@ async function changeMultiPreset(preset) {
     render();
   }
 }
-
-function setMultiCustomDate(which, value) {
-  if (which === 'start') multiStartDate = value;
-  else multiEndDate = value;
-  render();
-}
-
+function setMultiCustomDate(which, value) { if (which === 'start') multiStartDate = value; else multiEndDate = value; render(); }
 function toggleMultiSubTab(tab) { multiSubTab = tab; render(); }
 
+// ── 個股查詢日期 ──
 async function setStockQueryDate(value) {
   if (value && value !== '__today__' && !HISTORY_DATES) {
-    stockQueryLoading = true;
-    render();
-    await discoverHistoryDates();
-    stockQueryLoading = false;
+    stockQueryLoading = true; render(); await discoverHistoryDates(); stockQueryLoading = false;
   }
-  if (!value || value === '__today__') {
-    stockQueryDate = null;
-  } else {
-    stockQueryDate = HISTORY_DATES ? snapToHistoryDate(value) : value;
-  }
+  stockQueryDate = (!value || value === '__today__') ? null : (HISTORY_DATES ? snapToHistoryDate(value) : value);
   render();
 }
-
 async function ensureHistoryForStockQuery() {
   if (HISTORY_DATES) return;
-  stockQueryLoading = true;
-  render();
-  await discoverHistoryDates();
-  stockQueryLoading = false;
-  render();
+  stockQueryLoading = true; render(); await discoverHistoryDates(); stockQueryLoading = false; render();
 }
 
+// ── 個股查詢 ETF 篩選（按鈕式，與 ETF 明細多選邏輯一致）──
 function setStockQueryEtfFilter(etfCode) {
   if (etfCode === '__all__') {
     stockQueryEtfFilter = null;
-    stockQueryCustomMode = false;
-  } else if (etfCode === '__custom__') {
-    stockQueryCustomMode = true;
-    stockQueryCustomSelected = Array.isArray(stockQueryEtfFilter) ? [...stockQueryEtfFilter] : [];
   } else {
-    stockQueryEtfFilter = etfCode;
-    stockQueryCustomMode = false;
+    // 若已選同一單檔，再點一次 → 取消回全部
+    if (stockQueryEtfFilter === etfCode) stockQueryEtfFilter = null;
+    else stockQueryEtfFilter = etfCode;
   }
   render();
 }
 
-function applyStockQueryGroup(groupType, groupKey) {
-  let codes;
-  if (groupType === 'size') codes = getEtfsBySize(groupKey);
-  else if (groupType === 'issuer') codes = getEtfsByIssuer(groupKey);
-  else codes = [];
-  codes = codes.filter(function(c) { return DATA.today[c]; });
-  if (codes.length === 0) return;
-  if (codes.length === 1) {
-    stockQueryEtfFilter = codes[0];
+function toggleStockQueryMultiMode() {
+  if (stockQueryMultiSelectMode) {
+    // 按「完成多選」時由 applyStockQueryMulti 處理，此處為「進入多選模式」或點按鈕本身切換
+    stockQueryMultiSelectMode = false;
   } else {
-    stockQueryEtfFilter = codes;
+    stockQueryMultiSelectMode = true;
+    // 預填現有選擇
+    if (Array.isArray(stockQueryEtfFilter)) stockQueryCustomSelected = [...stockQueryEtfFilter];
+    else if (typeof stockQueryEtfFilter === 'string') stockQueryCustomSelected = [stockQueryEtfFilter];
+    else stockQueryCustomSelected = [];
   }
-  stockQueryCustomMode = false;
   render();
 }
 
 function toggleStockQueryCustomEtf(etfCode) {
   const idx = stockQueryCustomSelected.indexOf(etfCode);
-  if (idx >= 0) stockQueryCustomSelected.splice(idx, 1);
-  else stockQueryCustomSelected.push(etfCode);
+  if (idx >= 0) stockQueryCustomSelected.splice(idx, 1); else stockQueryCustomSelected.push(etfCode);
   render();
 }
 
-function applyStockQueryCustom() {
-  if (stockQueryCustomSelected.length === 0) {
-    stockQueryEtfFilter = null;
-  } else if (stockQueryCustomSelected.length === 1) {
-    stockQueryEtfFilter = stockQueryCustomSelected[0];
-  } else {
-    stockQueryEtfFilter = [...stockQueryCustomSelected];
-  }
-  stockQueryCustomMode = false;
+function applyStockQueryMulti() {
+  stockQueryMultiSelectMode = false;
+  if (stockQueryCustomSelected.length === 0) stockQueryEtfFilter = null;
+  else if (stockQueryCustomSelected.length === 1) stockQueryEtfFilter = stockQueryCustomSelected[0];
+  else stockQueryEtfFilter = [...stockQueryCustomSelected];
   render();
 }
 
-function cancelStockQueryCustom() {
-  stockQueryCustomMode = false;
-  render();
-}
-
+// 舊版相容保留（不再從 UI 呼叫）
+function applyStockQueryCustom() { applyStockQueryMulti(); }
+function cancelStockQueryCustom() { stockQueryMultiSelectMode = false; render(); }
 function selectAllStockQueryCustom() { stockQueryCustomSelected = Object.keys(DATA.today); render(); }
 function clearStockQueryCustom() { stockQueryCustomSelected = []; render(); }
 
 function getStockQuerySnap(targetDate) {
-  if (!targetDate) {
-    return {
-      snap: { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date },
-      prevDate: DATA.prev_date,
-      prevSnap: DATA.prev ? { today: DATA.prev } : null,
-    };
-  }
-  const snap = HISTORY_CACHE[targetDate];
-  if (!snap) return null;
+  if (!targetDate) return { snap: { today: DATA.today, prev: DATA.prev, prices: DATA.prices, today_date: DATA.today_date }, prevDate: DATA.prev_date, prevSnap: DATA.prev ? { today: DATA.prev } : null };
+  const snap = HISTORY_CACHE[targetDate]; if (!snap) return null;
   const idx = HISTORY_DATES.indexOf(targetDate);
-  let prevDate = null;
-  let prevSnap = null;
-  if (idx >= 0 && idx + 1 < HISTORY_DATES.length) {
-    prevDate = HISTORY_DATES[idx + 1];
-    prevSnap = HISTORY_CACHE[prevDate];
-  }
-  return { snap: snap, prevDate: prevDate, prevSnap: prevSnap };
+  let prevDate = null, prevSnap = null;
+  if (idx >= 0 && idx + 1 < HISTORY_DATES.length) { prevDate = HISTORY_DATES[idx + 1]; prevSnap = HISTORY_CACHE[prevDate]; }
+  return { snap, prevDate, prevSnap };
 }
 
 function aggregate(snapshot, prices) {
   const map = {};
-  Object.entries(snapshot || {}).forEach(function(entry) {
-    const etfCode = entry[0], etf = entry[1];
+  Object.entries(snapshot || {}).forEach(function([etfCode, etf]) {
     (etf.holdings || []).forEach(function(h) {
       if (!map[h.code]) map[h.code] = { code: h.code, name: h.name, total_lots: 0, etfs: [] };
       map[h.code].total_lots += (h.lots || 0);
       map[h.code].etfs.push({ etf: etfCode, etf_name: etf.name, lots: h.lots, weight: h.weight });
     });
   });
-  Object.values(map).forEach(function(s) {
+  Object.values(map).forEach(s => {
     s.price = prices[s.code] != null ? prices[s.code] : null;
     s.market_value = s.price ? s.total_lots * 1000 * s.price : null;
     s.etf_count = s.etfs.length;
   });
   return map;
 }
-
 function buildPrevRankMap(prevAgg, sortKey) {
-  const sorted = Object.values(prevAgg)
-    .filter(function(s) { return s[sortKey] != null && s[sortKey] !== 0; })
-    .sort(function(a, b) { return b[sortKey] - a[sortKey]; });
-  const map = {};
-  sorted.forEach(function(s, i) { map[s.code] = i + 1; });
-  return map;
+  const sorted = Object.values(prevAgg).filter(s => s[sortKey] != null && s[sortKey] !== 0).sort((a, b) => b[sortKey] - a[sortKey]);
+  const map = {}; sorted.forEach((s, i) => { map[s.code] = i + 1; }); return map;
 }
-
 function detectNewEtfs(todaySnap, prevSnap) {
-  const todayKeys = new Set(Object.keys(todaySnap || {}));
-  const prevKeys = new Set(Object.keys(prevSnap || {}));
+  const todayKeys = new Set(Object.keys(todaySnap || {})), prevKeys = new Set(Object.keys(prevSnap || {}));
   if (prevKeys.size === 0) return [];
-  const added = [];
-  todayKeys.forEach(function(k) {
-    if (!prevKeys.has(k)) added.push(k);
-  });
-  return added;
+  const added = []; todayKeys.forEach(k => { if (!prevKeys.has(k)) added.push(k); }); return added;
 }
-
 function computeFlows(todaySnap, prevSnap, prices, newEtfs) {
   const filteredTodaySnap = {};
-  Object.entries(todaySnap || {}).forEach(function(entry) {
-    const etfCode = entry[0], etf = entry[1];
-    if (newEtfs.indexOf(etfCode) === -1) {
-      filteredTodaySnap[etfCode] = etf;
-    }
-  });
+  Object.entries(todaySnap || {}).forEach(([etfCode, etf]) => { if (newEtfs.indexOf(etfCode) === -1) filteredTodaySnap[etfCode] = etf; });
   const filteredTodayAgg = aggregate(filteredTodaySnap, prices);
   const prevAgg = aggregate(prevSnap, prices);
   const todayAggFull = aggregate(todaySnap, prices);
-
   const keys = new Set([...Object.keys(filteredTodayAgg), ...Object.keys(prevAgg)]);
   const flows = [];
   keys.forEach(function(code) {
     const t = filteredTodayAgg[code], p = prevAgg[code];
-    const today_lots = t ? t.total_lots : 0;
-    const prev_lots = p ? p.total_lots : 0;
-    const diff = today_lots - prev_lots;
+    const today_lots = t ? t.total_lots : 0, prev_lots = p ? p.total_lots : 0, diff = today_lots - prev_lots;
     const price = prices[code] != null ? prices[code] : null;
-    const full_today_lots = todayAggFull[code] ? todayAggFull[code].total_lots : 0;
-    const full_etf_count = todayAggFull[code] ? todayAggFull[code].etf_count : 0;
-    flows.push({
-      code: code,
-      name: (t && t.name) || (p && p.name) || (todayAggFull[code] && todayAggFull[code].name) || code,
-      today_lots: today_lots, prev_lots: prev_lots, diff: diff,
-      diff_pct: prev_lots > 0 ? (diff / prev_lots) * 100 : (today_lots > 0 ? 999 : 0),
-      price: price, diff_value: price ? diff * 1000 * price : null,
-      etf_count: full_etf_count,
-      has_new_etf: full_today_lots !== today_lots,
-    });
+    flows.push({ code, name: (t && t.name) || (p && p.name) || (todayAggFull[code] && todayAggFull[code].name) || code,
+      today_lots, prev_lots, diff, diff_pct: prev_lots > 0 ? (diff / prev_lots) * 100 : (today_lots > 0 ? 999 : 0),
+      price, diff_value: price ? diff * 1000 * price : null,
+      etf_count: todayAggFull[code] ? todayAggFull[code].etf_count : 0,
+      has_new_etf: (todayAggFull[code] ? todayAggFull[code].total_lots : 0) !== today_lots });
   });
   return flows;
 }
 
-function openStockModal(code) {
-  modalStock = code;
-  stockModalTab = 'holdings';
-  stockModalHistoryEtf = null;
-  renderModal();
-}
-function closeStockModal() {
-  modalStock = null;
-  stockModalTab = 'holdings';
-  document.getElementById('stock-modal').classList.add('hidden');
-  document.getElementById('stock-modal').classList.remove('flex');
-}
-
+// ── Modal ──
+function openStockModal(code) { modalStock = code; stockModalTab = 'holdings'; stockModalHistoryEtf = null; renderModal(); }
+function closeStockModal() { modalStock = null; document.getElementById('stock-modal').classList.add('hidden'); document.getElementById('stock-modal').classList.remove('flex'); }
 async function setStockModalTab(tab) {
   stockModalTab = tab;
-  if (tab === 'history' && !HISTORY_DATES) {
-    stockModalHistoryLoading = true;
-    renderModal();
-    await discoverHistoryDates();
-    stockModalHistoryLoading = false;
-  }
+  if (tab === 'history' && !HISTORY_DATES) { stockModalHistoryLoading = true; renderModal(); await discoverHistoryDates(); stockModalHistoryLoading = false; }
   renderModal();
 }
-
 function setStockModalHistoryEtf(etfCode) {
   if (etfCode === '__all__') { stockModalHistoryEtf = null; stockModalCustomMode = false; }
-  else if (etfCode === '__custom__') {
-    stockModalCustomMode = true;
-    stockModalCustomSelected = Array.isArray(stockModalHistoryEtf) ? [...stockModalHistoryEtf] : [];
-  } else { stockModalHistoryEtf = etfCode; stockModalCustomMode = false; }
+  else if (etfCode === '__custom__') { stockModalCustomMode = true; stockModalCustomSelected = Array.isArray(stockModalHistoryEtf) ? [...stockModalHistoryEtf] : []; }
+  else { stockModalHistoryEtf = etfCode; stockModalCustomMode = false; }
   renderModal();
 }
-
-function toggleStockModalCustomEtf(etfCode) {
-  const idx = stockModalCustomSelected.indexOf(etfCode);
-  if (idx >= 0) stockModalCustomSelected.splice(idx, 1);
-  else stockModalCustomSelected.push(etfCode);
-  renderModal();
-}
-function applyStockModalCustom() {
-  if (stockModalCustomSelected.length === 0) stockModalHistoryEtf = null;
-  else if (stockModalCustomSelected.length === 1) stockModalHistoryEtf = stockModalCustomSelected[0];
-  else stockModalHistoryEtf = [...stockModalCustomSelected];
-  stockModalCustomMode = false;
-  renderModal();
-}
+function toggleStockModalCustomEtf(etfCode) { const idx = stockModalCustomSelected.indexOf(etfCode); if (idx >= 0) stockModalCustomSelected.splice(idx, 1); else stockModalCustomSelected.push(etfCode); renderModal(); }
+function applyStockModalCustom() { if (stockModalCustomSelected.length === 0) stockModalHistoryEtf = null; else if (stockModalCustomSelected.length === 1) stockModalHistoryEtf = stockModalCustomSelected[0]; else stockModalHistoryEtf = [...stockModalCustomSelected]; stockModalCustomMode = false; renderModal(); }
 function cancelStockModalCustom() { stockModalCustomMode = false; renderModal(); }
 function selectAllStockModalCustom() { stockModalCustomSelected = Object.keys(DATA.today); renderModal(); }
 function clearStockModalCustom() { stockModalCustomSelected = []; renderModal(); }
-
 async function openHistoryModal(etfCode, stockCode) {
-  historyModalEtf = etfCode;
-  historyModalStock = stockCode;
-  if (!HISTORY_DATES) {
-    historyModalLoading = true;
-    renderHistoryModal();
-    await discoverHistoryDates();
-    historyModalLoading = false;
-  }
+  historyModalEtf = etfCode; historyModalStock = stockCode;
+  if (!HISTORY_DATES) { historyModalLoading = true; renderHistoryModal(); await discoverHistoryDates(); historyModalLoading = false; }
   renderHistoryModal();
 }
-function closeHistoryModal() {
-  historyModalEtf = null;
-  historyModalStock = null;
-  document.getElementById('stock-modal').classList.add('hidden');
-  document.getElementById('stock-modal').classList.remove('flex');
-}
+function closeHistoryModal() { historyModalEtf = null; historyModalStock = null; document.getElementById('stock-modal').classList.add('hidden'); document.getElementById('stock-modal').classList.remove('flex'); }
 
 function getEtfStockHistory(etfCode, stockCode) {
   if (!HISTORY_DATES) return [];
   const series = [];
   HISTORY_DATES.forEach(function(date) {
-    const snap = HISTORY_CACHE[date];
-    if (!snap || !snap.today || !snap.today[etfCode]) return;
+    const snap = HISTORY_CACHE[date]; if (!snap || !snap.today || !snap.today[etfCode]) return;
     const etfData = snap.today[etfCode];
-    const holding = (etfData.holdings || []).find(function(h) { return h.code === stockCode; });
-    const lots = holding ? holding.lots : 0;
-    const price = (snap.prices && snap.prices[stockCode]) || null;
-    const mv = price ? lots * 1000 * price : null;
-    const weight = holding ? holding.weight : null;
-    series.push({
-      date: date, lots: lots, price: price, mv: mv, weight: weight,
-      held: lots > 0,
-      etfName: etfData.name || etfCode,
-      stockName: holding ? holding.name : null,
-    });
+    const holding = (etfData.holdings || []).find(h => h.code === stockCode);
+    const lots = holding ? holding.lots : 0, price = (snap.prices && snap.prices[stockCode]) || null;
+    series.push({ date, lots, price, mv: price ? lots * 1000 * price : null, weight: holding ? holding.weight : null,
+      held: lots > 0, etfName: etfData.name || etfCode, stockName: holding ? holding.name : null });
   });
   return series;
 }
-
 function getStockTotalHistory(stockCode, etfCodes) {
   if (!HISTORY_DATES) return [];
   const series = [];
   HISTORY_DATES.forEach(function(date) {
-    const snap = HISTORY_CACHE[date];
-    if (!snap || !snap.today) return;
+    const snap = HISTORY_CACHE[date]; if (!snap || !snap.today) return;
     let totalLots = 0, etfCount = 0, stockName = null;
     const targets = etfCodes || Object.keys(snap.today);
     targets.forEach(function(ec) {
-      const etfData = snap.today[ec];
-      if (!etfData) return;
-      const holding = (etfData.holdings || []).find(function(h) { return h.code === stockCode; });
-      if (holding && holding.lots > 0) {
-        totalLots += holding.lots;
-        etfCount += 1;
-        if (!stockName) stockName = holding.name;
-      }
+      const etfData = snap.today[ec]; if (!etfData) return;
+      const holding = (etfData.holdings || []).find(h => h.code === stockCode);
+      if (holding && holding.lots > 0) { totalLots += holding.lots; etfCount++; if (!stockName) stockName = holding.name; }
     });
     const price = (snap.prices && snap.prices[stockCode]) || null;
-    const mv = price ? totalLots * 1000 * price : null;
-    series.push({
-      date: date, lots: totalLots, price: price, mv: mv, etf_count: etfCount,
-      held: totalLots > 0, stockName: stockName,
-    });
+    series.push({ date, lots: totalLots, price, mv: price ? totalLots * 1000 * price : null, etf_count: etfCount, held: totalLots > 0, stockName });
   });
   return series;
 }
 
 function renderModal() {
-  const modal = document.getElementById('stock-modal');
-  const content = document.getElementById('modal-content');
-  if (!modalStock || !DATA) {
-    modal.classList.add('hidden'); modal.classList.remove('flex'); return;
-  }
-  const todayAgg = aggregate(DATA.today, DATA.prices || {});
-  const stock = todayAgg[modalStock];
+  const modal = document.getElementById('stock-modal'), content = document.getElementById('modal-content');
+  if (!modalStock || !DATA) { modal.classList.add('hidden'); modal.classList.remove('flex'); return; }
+  const todayAgg = aggregate(DATA.today, DATA.prices || {}), stock = todayAgg[modalStock];
   if (!stock) { closeStockModal(); return; }
-  const etfs = [...stock.etfs].sort(function(a, b) { return b.lots - a.lots; });
+  const etfs = [...stock.etfs].sort((a, b) => b.lots - a.lots);
   const prev = aggregate(DATA.prev || {}, DATA.prices || {})[modalStock];
-  const prevLots = prev ? prev.total_lots : 0;
-  const diff = stock.total_lots - prevLots;
+  const prevLots = prev ? prev.total_lots : 0, diff = stock.total_lots - prevLots;
   const diffSpanColor = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-rose-400' : 'text-slate-500');
   const diffSpanText = diff !== 0 ? (diff > 0 ? '▲ +' : '▼ ') + fmt(Math.abs(diff)) : '— 持平';
-
-  const headerHtml = ''
-    + '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2">'
-    + '<div class="min-w-0">'
-    + '<div class="flex items-baseline gap-2 flex-wrap">'
-    + '<span class="font-bold text-lg sm:text-xl">' + esc(stock.name) + '</span>'
-    + '<span class="text-xs sm:text-sm text-slate-400">' + esc(stock.code) + '</span>'
-    + '</div>'
-    + '<div class="text-xs text-slate-400 mt-1 leading-relaxed">'
-    + '合計 <span class="text-slate-200 font-semibold">' + fmt(stock.total_lots) + '</span> 張'
-    + ' · <span class="text-amber-400">' + stock.etf_count + '</span> 檔 ETF 持有'
-    + ' · 收盤 ' + (stock.price ? fmt(stock.price, 2) : 'N/A')
-    + ' · 市值 <span class="text-amber-400">' + fmtM(stock.market_value) + '</span>'
-    + '</div>'
-    + '<div class="text-xs mt-1">'
-    + '<span class="text-slate-500">前日合計:</span>'
-    + ' <span class="num">' + fmt(prevLots) + '</span> 張'
-    + ' <span class="ml-2 font-semibold ' + diffSpanColor + '">' + diffSpanText + ' 張</span>'
-    + '</div>'
-    + '</div>'
-    + '<button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button>'
-    + '</div>';
-
-  const tabHtml = '<div class="flex gap-1 px-3 sm:px-4 pt-2 border-b border-slate-700 bg-slate-900/50">'
-    + '<button onclick="setStockModalTab(\'holdings\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'holdings' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📋 今日持有</button>'
-    + '<button onclick="setStockModalTab(\'history\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'history' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📈 歷史趨勢</button>'
-    + '</div>';
-
-  let bodyHtml = '';
-  if (stockModalTab === 'holdings') bodyHtml = renderModalHoldings(stock, etfs);
-  else bodyHtml = renderModalHistory(stock);
-
-  content.innerHTML = headerHtml + tabHtml + bodyHtml
-    + '<div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>';
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
+  const headerHtml = '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex items-baseline gap-2 flex-wrap"><span class="font-bold text-lg sm:text-xl">' + esc(stock.name) + '</span><span class="text-xs sm:text-sm text-slate-400">' + esc(stock.code) + '</span></div><div class="text-xs text-slate-400 mt-1 leading-relaxed">合計 <span class="text-slate-200 font-semibold">' + fmt(stock.total_lots) + '</span> 張 · <span class="text-amber-400">' + stock.etf_count + '</span> 檔 ETF 持有 · 收盤 ' + (stock.price ? fmt(stock.price, 2) : 'N/A') + ' · 市值 <span class="text-amber-400">' + fmtM(stock.market_value) + '</span></div><div class="text-xs mt-1"><span class="text-slate-500">前日合計:</span> <span class="num">' + fmt(prevLots) + '</span> 張 <span class="ml-2 font-semibold ' + diffSpanColor + '">' + diffSpanText + ' 張</span></div></div><button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button></div>';
+  const tabHtml = '<div class="flex gap-1 px-3 sm:px-4 pt-2 border-b border-slate-700 bg-slate-900/50"><button onclick="setStockModalTab(\'holdings\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'holdings' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📋 今日持有</button><button onclick="setStockModalTab(\'history\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'history' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📈 歷史趨勢</button></div>';
+  let bodyHtml = stockModalTab === 'holdings' ? renderModalHoldings(stock, etfs) : renderModalHistory(stock);
+  content.innerHTML = headerHtml + tabHtml + bodyHtml + '<div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>';
+  modal.classList.remove('hidden'); modal.classList.add('flex');
 }
-
 function renderModalHoldings(stock, etfs) {
   let etfRowsHtml = '';
   etfs.forEach(function(e, i) {
     const isNew = NEW_ETFS.indexOf(e.etf) !== -1;
-    const pv = ((DATA.prev && DATA.prev[e.etf] && DATA.prev[e.etf].holdings) || []).find(function(h) { return h.code === stock.code; });
+    const pv = ((DATA.prev && DATA.prev[e.etf] && DATA.prev[e.etf].holdings) || []).find(h => h.code === stock.code);
     const d = e.lots - (pv ? pv.lots : 0);
-    const newBadge = isNew ? ' <span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 py-0.5 rounded ml-1">新</span>' : '';
     const diffColor = isNew ? 'text-amber-400' : (d > 0 ? 'text-emerald-400' : (d < 0 ? 'text-rose-400' : 'text-slate-500'));
     const diffText = isNew ? '首日' : (d !== 0 ? (d > 0 ? '+' : '') + fmt(d) : '—');
-    etfRowsHtml += '<tr class="hover:bg-slate-800/30 ' + (isNew ? 'bg-amber-950/20' : '') + '">'
-      + '<td class="px-2 sm:px-3 py-2 text-slate-500">' + (i + 1) + '</td>'
-      + '<td class="px-2 sm:px-3 py-2">'
-      + '<div class="text-slate-200 text-xs sm:text-sm">' + esc(e.etf_name) + newBadge + '</div>'
-      + '<div class="text-[10px] sm:text-xs text-slate-500">' + esc(e.etf) + '</div>'
-      + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num font-semibold text-slate-100">' + fmt(e.lots) + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num text-xs ' + diffColor + '">' + diffText + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num text-xs text-slate-400">' + e.weight + '%</td>'
-      + '</tr>';
+    etfRowsHtml += '<tr class="hover:bg-slate-800/30 ' + (isNew ? 'bg-amber-950/20' : '') + '"><td class="px-2 sm:px-3 py-2 text-slate-500">' + (i + 1) + '</td><td class="px-2 sm:px-3 py-2"><div class="text-slate-200 text-xs sm:text-sm">' + esc(e.etf_name) + (isNew ? ' <span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 py-0.5 rounded ml-1">新</span>' : '') + '</div><div class="text-[10px] sm:text-xs text-slate-500">' + esc(e.etf) + '</div></td><td class="px-2 sm:px-3 py-2 text-right num font-semibold text-slate-100">' + fmt(e.lots) + '</td><td class="px-2 sm:px-3 py-2 text-right num text-xs ' + diffColor + '">' + diffText + '</td><td class="px-2 sm:px-3 py-2 text-right num text-xs text-slate-400">' + e.weight + '%</td></tr>';
   });
-  return '<div class="overflow-y-auto flex-1">'
-    + '<table class="w-full text-sm">'
-    + '<thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0">'
-    + '<tr>'
-    + '<th class="px-2 sm:px-3 py-2 text-left">#</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-left">ETF</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">持有張數</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">前日變動</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">佔比</th>'
-    + '</tr></thead>'
-    + '<tbody class="divide-y divide-slate-800">' + etfRowsHtml + '</tbody>'
-    + '</table>'
-    + '</div>';
+  return '<div class="overflow-y-auto flex-1"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0"><tr><th class="px-2 sm:px-3 py-2 text-left">#</th><th class="px-2 sm:px-3 py-2 text-left">ETF</th><th class="px-2 sm:px-3 py-2 text-right">持有張數</th><th class="px-2 sm:px-3 py-2 text-right">前日變動</th><th class="px-2 sm:px-3 py-2 text-right">佔比</th></tr></thead><tbody class="divide-y divide-slate-800">' + etfRowsHtml + '</tbody></table></div>';
 }
-
 function renderModalHistory(stock) {
   if (stockModalHistoryLoading) return '<div class="p-8 text-center text-slate-400 flex-1">載入歷史快照中...</div>';
   if (!HISTORY_DATES || HISTORY_DATES.length === 0) return '<div class="p-8 text-center text-rose-400 flex-1">⚠️ 無歷史資料</div>';
-
   const allEtfCodes = Object.keys(DATA.today).sort();
   let filterHtml;
   if (stockModalCustomMode) {
     let checklistHtml = '';
-    allEtfCodes.forEach(function(k) {
-      const checked = stockModalCustomSelected.indexOf(k) !== -1;
-      const etfName = (DATA.today[k] && DATA.today[k].name) || k;
-      checklistHtml += '<label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-800/50 cursor-pointer text-xs">'
-        + '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="toggleStockModalCustomEtf(\'' + esc(k) + '\')" class="cursor-pointer">'
-        + '<span class="text-slate-300">' + esc(k) + '</span>'
-        + '<span class="text-slate-500 truncate">' + esc(etfName) + '</span>'
-        + '</label>';
-    });
-    filterHtml = '<div class="px-3 sm:px-4 py-3 border-b border-slate-800 bg-slate-900/50">'
-      + '<div class="flex flex-wrap items-center gap-2 mb-2 text-xs">'
-      + '<span class="text-slate-400">✏️ 自選 ETF 組合 (' + stockModalCustomSelected.length + ' / ' + allEtfCodes.length + ')</span>'
-      + '<button onclick="selectAllStockModalCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">全選</button>'
-      + '<button onclick="clearStockModalCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">全不選</button>'
-      + '<button onclick="applyStockModalCustom()" class="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white ml-auto">套用</button>'
-      + '<button onclick="cancelStockModalCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">取消</button>'
-      + '</div>'
-      + '<div class="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-48 overflow-y-auto bg-slate-950/50 p-2 rounded">' + checklistHtml + '</div>'
-      + '</div>';
+    allEtfCodes.forEach(k => { const checked = stockModalCustomSelected.indexOf(k) !== -1; const etfName = (DATA.today[k] && DATA.today[k].name) || k; checklistHtml += '<label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-800/50 cursor-pointer text-xs"><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="toggleStockModalCustomEtf(\'' + esc(k) + '\')" class="cursor-pointer"><span class="text-slate-300">' + esc(k) + '</span><span class="text-slate-500 truncate">' + esc(etfName) + '</span></label>'; });
+    filterHtml = '<div class="px-3 sm:px-4 py-3 border-b border-slate-800 bg-slate-900/50"><div class="flex flex-wrap items-center gap-2 mb-2 text-xs"><span class="text-slate-400">✏️ 自選 ETF 組合 (' + stockModalCustomSelected.length + ' / ' + allEtfCodes.length + ')</span><button onclick="selectAllStockModalCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">全選</button><button onclick="clearStockModalCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">全不選</button><button onclick="applyStockModalCustom()" class="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white ml-auto">套用</button><button onclick="cancelStockModalCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">取消</button></div><div class="grid grid-cols-2 sm:grid-cols-3 gap-1 max-h-48 overflow-y-auto bg-slate-950/50 p-2 rounded">' + checklistHtml + '</div></div>';
   } else {
-    const isAll = !stockModalHistoryEtf;
-    const isCustom = Array.isArray(stockModalHistoryEtf);
-    const isSingle = typeof stockModalHistoryEtf === 'string';
+    const isAll = !stockModalHistoryEtf, isCustom = Array.isArray(stockModalHistoryEtf), isSingle = typeof stockModalHistoryEtf === 'string';
     const allBtnCls = isAll ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
     const customBtnCls = isCustom ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
     let singleOptions = '<option value="__placeholder__">— 選擇單檔 —</option>';
-    allEtfCodes.forEach(function(k) {
-      const sel = isSingle && stockModalHistoryEtf === k ? 'selected' : '';
-      const etfName = (DATA.today[k] && DATA.today[k].name) || k;
-      singleOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(etfName) + '</option>';
-    });
-    filterHtml = '<div class="px-3 sm:px-4 py-3 border-b border-slate-800 bg-slate-900/30">'
-      + '<div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
-      + '<span class="text-slate-400">📊 ETF 視角:</span>'
-      + '<button onclick="setStockModalHistoryEtf(\'__all__\')" class="px-3 py-1 rounded ' + allBtnCls + '">全部合計</button>'
-      + '<button onclick="setStockModalHistoryEtf(\'__custom__\')" class="px-3 py-1 rounded ' + customBtnCls + '">✏️ 自選組合' + (isCustom ? ' (' + stockModalHistoryEtf.length + ')' : '') + '</button>'
-      + '<span class="text-slate-500 mx-1">|</span>'
-      + '<span class="text-slate-400 text-xs">單檔:</span>'
-      + '<select onchange="if (this.value !== \'__placeholder__\') setStockModalHistoryEtf(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + singleOptions + '</select>'
-      + '</div>';
-    if (isCustom && stockModalHistoryEtf.length > 0) {
-      filterHtml += '<div class="text-xs text-slate-500 mt-2">'
-        + '已選: ' + stockModalHistoryEtf.map(esc).join(', ')
-        + ' <button onclick="setStockModalHistoryEtf(\'__custom__\')" class="ml-2 text-amber-400 hover:text-amber-300 underline">編輯</button>'
-        + '</div>';
-    }
+    allEtfCodes.forEach(k => { const sel = isSingle && stockModalHistoryEtf === k ? 'selected' : ''; singleOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc((DATA.today[k] && DATA.today[k].name) || k) + '</option>'; });
+    filterHtml = '<div class="px-3 sm:px-4 py-3 border-b border-slate-800 bg-slate-900/30"><div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm"><span class="text-slate-400">📊 ETF 視角:</span><button onclick="setStockModalHistoryEtf(\'__all__\')" class="px-3 py-1 rounded ' + allBtnCls + '">全部合計</button><button onclick="setStockModalHistoryEtf(\'__custom__\')" class="px-3 py-1 rounded ' + customBtnCls + '">✏️ 自選組合' + (isCustom ? ' (' + stockModalHistoryEtf.length + ')' : '') + '</button><span class="text-slate-500 mx-1">|</span><span class="text-slate-400 text-xs">單檔:</span><select onchange="if (this.value !== \'__placeholder__\') setStockModalHistoryEtf(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + singleOptions + '</select></div>';
+    if (isCustom && stockModalHistoryEtf.length > 0) filterHtml += '<div class="text-xs text-slate-500 mt-2">已選: ' + stockModalHistoryEtf.map(esc).join(', ') + ' <button onclick="setStockModalHistoryEtf(\'__custom__\')" class="ml-2 text-amber-400 hover:text-amber-300 underline">編輯</button></div>';
     filterHtml += '</div>';
   }
-
   let series, viewLabel;
-  if (typeof stockModalHistoryEtf === 'string') {
-    series = getEtfStockHistory(stockModalHistoryEtf, stock.code);
-    const etfName = (DATA.today[stockModalHistoryEtf] && DATA.today[stockModalHistoryEtf].name) || '';
-    viewLabel = '單一 ETF 視角: <span class="text-amber-400 font-semibold">' + esc(stockModalHistoryEtf) + ' ' + esc(etfName) + '</span>';
-  } else if (Array.isArray(stockModalHistoryEtf) && stockModalHistoryEtf.length > 0) {
-    series = getStockTotalHistory(stock.code, stockModalHistoryEtf);
-    viewLabel = '自選組合視角: <span class="text-sky-400 font-semibold">' + stockModalHistoryEtf.length + ' 檔合計</span> <span class="text-slate-500">(' + stockModalHistoryEtf.map(esc).join(', ') + ')</span>';
-  } else {
-    series = getStockTotalHistory(stock.code);
-    viewLabel = '全部 ETF 合計視角';
-  }
-
+  if (typeof stockModalHistoryEtf === 'string') { series = getEtfStockHistory(stockModalHistoryEtf, stock.code); viewLabel = '單一 ETF 視角: <span class="text-amber-400 font-semibold">' + esc(stockModalHistoryEtf) + ' ' + esc((DATA.today[stockModalHistoryEtf] && DATA.today[stockModalHistoryEtf].name) || '') + '</span>'; }
+  else if (Array.isArray(stockModalHistoryEtf) && stockModalHistoryEtf.length > 0) { series = getStockTotalHistory(stock.code, stockModalHistoryEtf); viewLabel = '自選組合視角: <span class="text-sky-400 font-semibold">' + stockModalHistoryEtf.length + ' 檔合計</span>'; }
+  else { series = getStockTotalHistory(stock.code); viewLabel = '全部 ETF 合計視角'; }
   if (!series.length) return filterHtml + '<div class="p-8 text-center text-slate-500 flex-1">期間內無持股資料</div>';
-
-  const seriesWithDiff = series.map(function(s, i) {
-    const prevS = series[i + 1];
-    const diff = prevS ? (s.lots - prevS.lots) : null;
-    return Object.assign({}, s, { diff: diff });
-  });
-
-  const heldDays = series.filter(function(s) { return s.held; });
-  const maxLots = heldDays.length > 0 ? Math.max.apply(null, heldDays.map(function(s) { return s.lots; })) : 0;
-  const minLots = heldDays.length > 0 ? Math.min.apply(null, heldDays.map(function(s) { return s.lots; })) : 0;
-  const firstLots = series.length > 0 ? series[series.length - 1].lots : 0;
-  const lastLots = series.length > 0 ? series[0].lots : 0;
-  const totalDiff = lastLots - firstLots;
+  const seriesWithDiff = series.map((s, i) => Object.assign({}, s, { diff: series[i + 1] ? s.lots - series[i + 1].lots : null }));
+  const heldDays = series.filter(s => s.held);
+  const maxLots = heldDays.length > 0 ? Math.max(...heldDays.map(s => s.lots)) : 0;
+  const minLots = heldDays.length > 0 ? Math.min(...heldDays.map(s => s.lots)) : 0;
+  const totalDiff = (series[0] ? series[0].lots : 0) - (series[series.length - 1] ? series[series.length - 1].lots : 0);
   const totalDiffColor = totalDiff > 0 ? 'text-emerald-400' : (totalDiff < 0 ? 'text-rose-400' : 'text-slate-400');
-
-  const statsHtml = '<div class="px-3 sm:px-4 py-2 text-xs text-slate-400 bg-slate-900/30 border-b border-slate-800">'
-    + viewLabel + '<br>'
-    + '期間: ' + esc(series[series.length - 1].date) + ' ~ ' + esc(series[0].date) + ' (' + series.length + ' 個交易日) · '
-    + '期間總變動: <span class="font-semibold ' + totalDiffColor + '">' + (totalDiff > 0 ? '+' : '') + fmt(totalDiff) + ' 張</span>'
-    + (heldDays.length > 0 ? ' · 區間 ' + fmt(minLots) + ' ~ ' + fmt(maxLots) + ' 張' : '')
-    + '</div>';
-
+  const statsHtml = '<div class="px-3 sm:px-4 py-2 text-xs text-slate-400 bg-slate-900/30 border-b border-slate-800">' + viewLabel + '<br>期間: ' + esc(series[series.length - 1].date) + ' ~ ' + esc(series[0].date) + ' (' + series.length + ' 個交易日) · 期間總變動: <span class="font-semibold ' + totalDiffColor + '">' + (totalDiff > 0 ? '+' : '') + fmt(totalDiff) + ' 張</span>' + (heldDays.length > 0 ? ' · 區間 ' + fmt(minLots) + ' ~ ' + fmt(maxLots) + ' 張' : '') + '</div>';
   const isSingleEtf = typeof stockModalHistoryEtf === 'string';
   let rowsHtml = '';
-  seriesWithDiff.forEach(function(s) {
-    const d = s.diff;
-    const dColor = d == null ? 'text-slate-600' : (d > 0 ? 'text-emerald-400' : (d < 0 ? 'text-rose-400' : 'text-slate-500'));
+  seriesWithDiff.forEach(s => {
+    const d = s.diff, dColor = d == null ? 'text-slate-600' : (d > 0 ? 'text-emerald-400' : (d < 0 ? 'text-rose-400' : 'text-slate-500'));
     const dText = d == null ? '—' : (d !== 0 ? (d > 0 ? '+' : '') + fmt(d) : '—');
     const lotsCell = s.held ? '<span class="text-slate-100 font-semibold num">' + fmt(s.lots) + '</span>' : '<span class="text-slate-600">未持有</span>';
-    const priceCell = s.price ? fmt(s.price, 2) : '—';
-    const mvCell = s.mv != null ? fmtM(s.mv) : '—';
-    rowsHtml += '<tr class="hover:bg-slate-800/30">'
-      + '<td class="px-2 sm:px-3 py-2 text-slate-300 num">' + esc(s.date) + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right">' + lotsCell + '</td>';
-    if (isSingleEtf) {
-      const weightCell = s.weight != null ? s.weight + '%' : '—';
-      rowsHtml += '<td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + weightCell + '</td>';
-    } else {
-      const etfCountCell = s.etf_count != null ? s.etf_count + '檔' : '—';
-      rowsHtml += '<td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + etfCountCell + '</td>';
-    }
-    rowsHtml += '<td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + priceCell + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num text-amber-400 whitespace-nowrap">' + mvCell + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num font-semibold ' + dColor + ' whitespace-nowrap">' + dText + '</td>'
-      + '</tr>';
+    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 sm:px-3 py-2 text-slate-300 num">' + esc(s.date) + '</td><td class="px-2 sm:px-3 py-2 text-right">' + lotsCell + '</td><td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + (isSingleEtf ? (s.weight != null ? s.weight + '%' : '—') : (s.etf_count != null ? s.etf_count + '檔' : '—')) + '</td><td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + (s.price ? fmt(s.price, 2) : '—') + '</td><td class="px-2 sm:px-3 py-2 text-right num text-amber-400 whitespace-nowrap">' + (s.mv != null ? fmtM(s.mv) : '—') + '</td><td class="px-2 sm:px-3 py-2 text-right num font-semibold ' + dColor + ' whitespace-nowrap">' + dText + '</td></tr>';
   });
-
-  let headerCols = '<th class="px-2 sm:px-3 py-2 text-left">日期</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">張數</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">' + (isSingleEtf ? '比例' : 'ETF 數') + '</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">收盤</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">市值</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">較前日</th>';
-
-  return filterHtml + statsHtml
-    + '<div class="overflow-y-auto flex-1">'
-    + '<table class="w-full text-sm">'
-    + '<thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0">'
-    + '<tr>' + headerCols + '</tr></thead>'
-    + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
-    + '</table>'
-    + '</div>';
+  return filterHtml + statsHtml + '<div class="overflow-y-auto flex-1"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0"><tr><th class="px-2 sm:px-3 py-2 text-left">日期</th><th class="px-2 sm:px-3 py-2 text-right">張數</th><th class="px-2 sm:px-3 py-2 text-right">' + (isSingleEtf ? '比例' : 'ETF 數') + '</th><th class="px-2 sm:px-3 py-2 text-right">收盤</th><th class="px-2 sm:px-3 py-2 text-right">市值</th><th class="px-2 sm:px-3 py-2 text-right">較前日</th></tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div>';
 }
 
-document.getElementById('stock-modal').addEventListener('click', function(e) {
-  if (e.target.id === 'stock-modal') {
-    if (historyModalEtf) closeHistoryModal();
-    else closeStockModal();
-  }
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    if (historyModalEtf) closeHistoryModal();
-    else if (modalStock) closeStockModal();
-  }
-});
+document.getElementById('stock-modal').addEventListener('click', e => { if (e.target.id === 'stock-modal') { if (historyModalEtf) closeHistoryModal(); else closeStockModal(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (historyModalEtf) closeHistoryModal(); else if (modalStock) closeStockModal(); } });
 
 function renderHistoryModal() {
-  const modal = document.getElementById('stock-modal');
-  const content = document.getElementById('modal-content');
-  if (!historyModalEtf || !historyModalStock) {
-    modal.classList.add('hidden'); modal.classList.remove('flex'); return;
-  }
-  if (historyModalLoading) {
-    content.innerHTML = '<div class="p-8 text-center text-slate-400">載入歷史快照中...</div>';
-    modal.classList.remove('hidden'); modal.classList.add('flex'); return;
-  }
-  if (!HISTORY_DATES || HISTORY_DATES.length === 0) {
-    content.innerHTML = '<div class="p-8 text-center text-rose-400">⚠️ 無歷史資料</div>';
-    modal.classList.remove('hidden'); modal.classList.add('flex'); return;
-  }
-
+  const modal = document.getElementById('stock-modal'), content = document.getElementById('modal-content');
+  if (!historyModalEtf || !historyModalStock) { modal.classList.add('hidden'); modal.classList.remove('flex'); return; }
+  if (historyModalLoading) { content.innerHTML = '<div class="p-8 text-center text-slate-400">載入歷史快照中...</div>'; modal.classList.remove('hidden'); modal.classList.add('flex'); return; }
+  if (!HISTORY_DATES || HISTORY_DATES.length === 0) { content.innerHTML = '<div class="p-8 text-center text-rose-400">⚠️ 無歷史資料</div>'; modal.classList.remove('hidden'); modal.classList.add('flex'); return; }
   const series = getEtfStockHistory(historyModalEtf, historyModalStock);
   let etfName = historyModalEtf, stockName = historyModalStock;
-  for (let i = 0; i < series.length; i++) {
-    if (series[i].etfName) etfName = series[i].etfName;
-    if (series[i].stockName) { stockName = series[i].stockName; break; }
-  }
-  if (stockName === historyModalStock && DATA) {
-    const todayAgg = aggregate(DATA.today, DATA.prices || {});
-    if (todayAgg[historyModalStock]) stockName = todayAgg[historyModalStock].name;
-  }
-
-  const seriesWithDiff = series.map(function(s, i) {
-    const prevS = series[i + 1];
-    const diff = prevS ? (s.lots - prevS.lots) : null;
-    return Object.assign({}, s, { diff: diff });
-  });
-  const heldDays = series.filter(function(s) { return s.held; });
-  const maxLots = heldDays.length > 0 ? Math.max.apply(null, heldDays.map(function(s) { return s.lots; })) : 0;
-  const minLots = heldDays.length > 0 ? Math.min.apply(null, heldDays.map(function(s) { return s.lots; })) : 0;
-  const firstLots = series.length > 0 ? series[series.length - 1].lots : 0;
-  const lastLots = series.length > 0 ? series[0].lots : 0;
-  const totalDiff = lastLots - firstLots;
-  const totalDiffColor = totalDiff > 0 ? 'text-emerald-400' : (totalDiff < 0 ? 'text-rose-400' : 'text-slate-400');
-
+  for (let i = 0; i < series.length; i++) { if (series[i].etfName) etfName = series[i].etfName; if (series[i].stockName) { stockName = series[i].stockName; break; } }
+  if (stockName === historyModalStock && DATA) { const ta = aggregate(DATA.today, DATA.prices || {}); if (ta[historyModalStock]) stockName = ta[historyModalStock].name; }
+  const seriesWithDiff = series.map((s, i) => Object.assign({}, s, { diff: series[i + 1] ? s.lots - series[i + 1].lots : null }));
+  const heldDays = series.filter(s => s.held);
+  const maxLots = heldDays.length > 0 ? Math.max(...heldDays.map(s => s.lots)) : 0;
+  const minLots = heldDays.length > 0 ? Math.min(...heldDays.map(s => s.lots)) : 0;
+  const firstLots = series.length > 0 ? series[series.length - 1].lots : 0, lastLots = series.length > 0 ? series[0].lots : 0;
+  const totalDiff = lastLots - firstLots, totalDiffColor = totalDiff > 0 ? 'text-emerald-400' : (totalDiff < 0 ? 'text-rose-400' : 'text-slate-400');
   let rowsHtml = '';
-  seriesWithDiff.forEach(function(s) {
-    const d = s.diff;
-    const dColor = d == null ? 'text-slate-600' : (d > 0 ? 'text-emerald-400' : (d < 0 ? 'text-rose-400' : 'text-slate-500'));
+  seriesWithDiff.forEach(s => {
+    const d = s.diff, dColor = d == null ? 'text-slate-600' : (d > 0 ? 'text-emerald-400' : (d < 0 ? 'text-rose-400' : 'text-slate-500'));
     const dText = d == null ? '—' : (d !== 0 ? (d > 0 ? '+' : '') + fmt(d) : '—');
-    const lotsCell = s.held ? '<span class="text-slate-100 font-semibold num">' + fmt(s.lots) + '</span>' : '<span class="text-slate-600">未持有</span>';
-    const weightCell = s.weight != null ? s.weight + '%' : '—';
-    const priceCell = s.price ? fmt(s.price, 2) : '—';
-    const mvCell = s.mv != null ? fmtM(s.mv) : '—';
-    rowsHtml += '<tr class="hover:bg-slate-800/30">'
-      + '<td class="px-2 sm:px-3 py-2 text-slate-300 num">' + esc(s.date) + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right">' + lotsCell + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + weightCell + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + priceCell + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num text-amber-400 whitespace-nowrap">' + mvCell + '</td>'
-      + '<td class="px-2 sm:px-3 py-2 text-right num font-semibold ' + dColor + ' whitespace-nowrap">' + dText + '</td>'
-      + '</tr>';
+    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 sm:px-3 py-2 text-slate-300 num">' + esc(s.date) + '</td><td class="px-2 sm:px-3 py-2 text-right">' + (s.held ? '<span class="text-slate-100 font-semibold num">' + fmt(s.lots) + '</span>' : '<span class="text-slate-600">未持有</span>') + '</td><td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + (s.weight != null ? s.weight + '%' : '—') + '</td><td class="px-2 sm:px-3 py-2 text-right num text-slate-400">' + (s.price ? fmt(s.price, 2) : '—') + '</td><td class="px-2 sm:px-3 py-2 text-right num text-amber-400 whitespace-nowrap">' + (s.mv != null ? fmtM(s.mv) : '—') + '</td><td class="px-2 sm:px-3 py-2 text-right num font-semibold ' + dColor + ' whitespace-nowrap">' + dText + '</td></tr>';
   });
-
-  content.innerHTML = ''
-    + '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2">'
-    + '<div class="min-w-0">'
-    + '<div class="text-xs text-slate-400 mb-1">📈 ETF × 個股 歷史持股</div>'
-    + '<div class="font-bold text-base sm:text-lg">' + esc(etfName) + ' <span class="text-xs sm:text-sm text-slate-400">(' + esc(historyModalEtf) + ')</span></div>'
-    + '<div class="text-xs sm:text-sm text-slate-400 mt-1">對 <span class="text-slate-200 font-semibold">' + esc(stockName) + '</span> <span class="text-slate-500">(' + esc(historyModalStock) + ')</span></div>'
-    + '<div class="text-xs text-slate-500 mt-2">'
-    + '期間: ' + esc(series[series.length - 1].date) + ' ~ ' + esc(series[0].date) + ' (' + series.length + ' 個交易日) · '
-    + '期間總變動: <span class="font-semibold ' + totalDiffColor + '">' + (totalDiff > 0 ? '+' : '') + fmt(totalDiff) + ' 張</span>'
-    + (heldDays.length > 0 ? ' · 區間 ' + fmt(minLots) + ' ~ ' + fmt(maxLots) + ' 張' : '')
-    + '</div>'
-    + '</div>'
-    + '<button onclick="closeHistoryModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button>'
-    + '</div>'
-    + '<div class="overflow-y-auto flex-1">'
-    + '<table class="w-full text-sm">'
-    + '<thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0">'
-    + '<tr>'
-    + '<th class="px-2 sm:px-3 py-2 text-left">日期</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">張數</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">比例</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">收盤</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">市值</th>'
-    + '<th class="px-2 sm:px-3 py-2 text-right">較前日</th>'
-    + '</tr></thead>'
-    + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
-    + '</table>'
-    + '</div>'
-    + '<div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>';
-
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
+  content.innerHTML = '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2"><div class="min-w-0"><div class="text-xs text-slate-400 mb-1">📈 ETF × 個股 歷史持股</div><div class="font-bold text-base sm:text-lg">' + esc(etfName) + ' <span class="text-xs sm:text-sm text-slate-400">(' + esc(historyModalEtf) + ')</span></div><div class="text-xs sm:text-sm text-slate-400 mt-1">對 <span class="text-slate-200 font-semibold">' + esc(stockName) + '</span> <span class="text-slate-500">(' + esc(historyModalStock) + ')</span></div><div class="text-xs text-slate-500 mt-2">期間: ' + esc(series[series.length - 1] && series[series.length - 1].date) + ' ~ ' + esc(series[0] && series[0].date) + ' (' + series.length + ' 個交易日) · 期間總變動: <span class="font-semibold ' + totalDiffColor + '">' + (totalDiff > 0 ? '+' : '') + fmt(totalDiff) + ' 張</span>' + (heldDays.length > 0 ? ' · 區間 ' + fmt(minLots) + ' ~ ' + fmt(maxLots) + ' 張' : '') + '</div></div><button onclick="closeHistoryModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button></div><div class="overflow-y-auto flex-1"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0"><tr><th class="px-2 sm:px-3 py-2 text-left">日期</th><th class="px-2 sm:px-3 py-2 text-right">張數</th><th class="px-2 sm:px-3 py-2 text-right">比例</th><th class="px-2 sm:px-3 py-2 text-right">收盤</th><th class="px-2 sm:px-3 py-2 text-right">市值</th><th class="px-2 sm:px-3 py-2 text-right">較前日</th></tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div><div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>';
+  modal.classList.remove('hidden'); modal.classList.add('flex');
 }
 
+// ── 主 render ──
 function render() {
-  const main = document.getElementById('main');
-  const banner = document.getElementById('new-etf-banner');
+  const main = document.getElementById('main'), banner = document.getElementById('new-etf-banner');
   if (!DATA) {
-    main.innerHTML = '<div class="max-w-lg mx-auto mt-16 text-center p-6 bg-slate-900 border border-slate-800 rounded-lg">'
-      + '<div class="text-rose-400 font-semibold mb-3 text-lg">⚠️ 尚無資料</div>'
-      + '<p class="text-sm text-slate-400">GitHub Actions 還沒跑過第一次,<br>或 latest.json 尚未被 commit。</p></div>';
-    if (banner) banner.classList.add('hidden');
-    return;
+    main.innerHTML = '<div class="max-w-lg mx-auto mt-16 text-center p-6 bg-slate-900 border border-slate-800 rounded-lg"><div class="text-rose-400 font-semibold mb-3 text-lg">⚠️ 尚無資料</div><p class="text-sm text-slate-400">GitHub Actions 還沒跑過第一次，<br>或 latest.json 尚未被 commit。</p></div>';
+    if (banner) banner.classList.add('hidden'); return;
   }
-
   NEW_ETFS = detectNewEtfs(DATA.today, DATA.prev);
-  const todayAgg = aggregate(DATA.today, DATA.prices || {});
-  const prevAgg = aggregate(DATA.prev || {}, DATA.prices || {});
+  const todayAgg = aggregate(DATA.today, DATA.prices || {}), prevAgg = aggregate(DATA.prev || {}, DATA.prices || {});
   const flows = computeFlows(DATA.today, DATA.prev || {}, DATA.prices || {}, NEW_ETFS);
-
-  const buy = flows.filter(function(f) { return f.diff > 0; }).sort(function(a, b) { return b.diff - a.diff; }).slice(0, TOP_N_FLOW);
-  const sell = flows.filter(function(f) { return f.diff < 0; }).sort(function(a, b) { return a.diff - b.diff; }).slice(0, TOP_N_FLOW);
-  const mv = Object.values(todayAgg).filter(function(s) { return s.market_value != null; }).sort(function(a, b) { return b.market_value - a.market_value; }).slice(0, TOP_N_MV);
-  const buyOverview = buy;
-  const sellOverview = sell;
-  const mvOverview = Object.values(todayAgg).filter(function(s) { return s.market_value != null; }).sort(function(a, b) { return b.market_value - a.market_value; }).slice(0, TOP_N_OVERVIEW);
+  const buy = flows.filter(f => f.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, TOP_N_FLOW);
+  const sell = flows.filter(f => f.diff < 0).sort((a, b) => a.diff - b.diff).slice(0, TOP_N_FLOW);
+  const mv = Object.values(todayAgg).filter(s => s.market_value != null).sort((a, b) => b.market_value - a.market_value).slice(0, TOP_N_MV);
+  const mvOverview = Object.values(todayAgg).filter(s => s.market_value != null).sort((a, b) => b.market_value - a.market_value).slice(0, TOP_N_OVERVIEW);
   const prevMvRank = buildPrevRankMap(prevAgg, 'market_value');
-
   document.getElementById('header-sub').textContent = Object.keys(DATA.today).length + ' 檔 ETF · ' + Object.keys(todayAgg).length + ' 檔個股';
   document.getElementById('update-info').innerHTML = '📅 ' + DATA.today_date + ' <span class="text-slate-500">vs</span> ' + (DATA.prev_date || '—');
-
   if (NEW_ETFS.length > 0 && banner) {
-    const names = NEW_ETFS.map(function(k) {
-      const n = (DATA.today[k] && DATA.today[k].name) || (ETF_META[k] && ETF_META[k].name) || k;
-      return '<span class="font-semibold">' + esc(n) + '</span> (' + esc(k) + ')';
-    }).join('、');
-    banner.innerHTML = '⚠️ 今日新增 ' + NEW_ETFS.length + ' 檔 ETF:' + names + ',首日持股<u>不計入買賣超</u>,明日起正常比對';
+    const names = NEW_ETFS.map(k => '<span class="font-semibold">' + esc((DATA.today[k] && DATA.today[k].name) || (ETF_META[k] && ETF_META[k].name) || k) + '</span> (' + esc(k) + ')').join('、');
+    banner.innerHTML = '⚠️ 今日新增 ' + NEW_ETFS.length + ' 檔 ETF：' + names + '，首日持股<u>不計入買賣超</u>，明日起正常比對';
     banner.classList.remove('hidden');
-  } else if (banner) {
-    banner.classList.add('hidden');
-  }
-
-  document.querySelectorAll('.tab-btn').forEach(function(btn) {
-    btn.classList.toggle('tab-active', btn.dataset.tab === currentTab);
-  });
-
-  if (currentTab === 'overview') main.innerHTML = renderOverview(todayAgg, prevAgg, buyOverview, sellOverview, mvOverview, prevMvRank);
+  } else if (banner) banner.classList.add('hidden');
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('tab-active', btn.dataset.tab === currentTab));
+  if (currentTab === 'overview') main.innerHTML = renderOverview(todayAgg, prevAgg, buy, sell, mvOverview, prevMvRank);
   else if (currentTab === 'buy') main.innerHTML = renderFlowTable(buy, 'buy');
   else if (currentTab === 'sell') main.innerHTML = renderFlowTable(sell, 'sell');
   else if (currentTab === 'multi') { main.innerHTML = renderMulti(); }
-  else if (currentTab === 'mv') {
-    const totalMV = Object.values(todayAgg).reduce(function(s, r) { return s + (r.market_value || 0); }, 0);
-    main.innerHTML = renderMV(mv, totalMV, prevMvRank);
-  }
+  else if (currentTab === 'mv') { const totalMV = Object.values(todayAgg).reduce((s, r) => s + (r.market_value || 0), 0); main.innerHTML = renderMV(mv, totalMV, prevMvRank); }
   else if (currentTab === 'etf') { main.innerHTML = renderETF(); bindEtf(); }
   else if (currentTab === 'stock') { main.innerHTML = renderStock(todayAgg, prevAgg); bindStock(todayAgg, prevAgg); }
-  else if (currentTab === 'heatmap') { main.innerHTML = renderHeatmap(); }
 }
 
 function renderOverview(todayAgg, prevAgg, buy, sell, mv, prevMvRank) {
-  const totalMV = Object.values(todayAgg).reduce(function(s, r) { return s + (r.market_value || 0); }, 0);
+  const totalMV = Object.values(todayAgg).reduce((s, r) => s + (r.market_value || 0), 0);
   const signals = generateDailySignals(todayAgg, prevAgg, NEW_ETFS);
-  const signalBannerHtml = renderSignalBanner(signals);
-
-  return signalBannerHtml
+  return renderSignalBanner(signals)
     + '<div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-5">'
     + statCard('追蹤 ETF', Object.keys(DATA.today).length, '檔', 'amber')
     + statCard('持股個股', Object.keys(todayAgg).length, '檔', 'sky')
@@ -1279,306 +712,137 @@ function renderOverview(todayAgg, prevAgg, buy, sell, mv, prevMvRank) {
     + '</div>'
     + '<div class="mt-4 text-xs text-slate-500 text-center">💡 點擊任一股票名稱可查看「哪幾檔 ETF 持有 + 持股張數排行」 · 市值頁可看 TOP 50</div>';
 }
-
 function statCard(label, value, suffix, color) {
-  const cls = {
-    amber: 'from-amber-500/20 to-amber-500/5 border-amber-500/30',
-    sky: 'from-sky-500/20 to-sky-500/5 border-sky-500/30',
-    emerald: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30',
-    rose: 'from-rose-500/20 to-rose-500/5 border-rose-500/30'
-  }[color];
-  return '<div class="bg-gradient-to-br ' + cls + ' border rounded-lg p-2.5 sm:p-3">'
-    + '<div class="text-xs text-slate-400 mb-1">' + esc(label) + '</div>'
-    + '<div class="flex items-baseline gap-1"><div class="text-xl sm:text-2xl font-bold">' + fmt(value) + '</div><div class="text-xs text-slate-400">' + esc(suffix) + '</div></div></div>';
+  const cls = { amber: 'from-amber-500/20 to-amber-500/5 border-amber-500/30', sky: 'from-sky-500/20 to-sky-500/5 border-sky-500/30', emerald: 'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30', rose: 'from-rose-500/20 to-rose-500/5 border-rose-500/30' }[color];
+  return '<div class="bg-gradient-to-br ' + cls + ' border rounded-lg p-2.5 sm:p-3"><div class="text-xs text-slate-400 mb-1">' + esc(label) + '</div><div class="flex items-baseline gap-1"><div class="text-xl sm:text-2xl font-bold">' + fmt(value) + '</div><div class="text-xs text-slate-400">' + esc(suffix) + '</div></div></div>';
 }
-
 function dashCard(title, icon, color, inner) {
   const text = { emerald: 'text-emerald-400', rose: 'text-rose-400', amber: 'text-amber-400' }[color];
-  return '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">'
-    + '<div class="px-4 py-3 border-b border-slate-800 font-semibold text-sm ' + text + '">' + icon + ' ' + esc(title) + '</div>'
-    + '<div>' + inner + '</div></div>';
+  return '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden"><div class="px-4 py-3 border-b border-slate-800 font-semibold text-sm ' + text + '">' + icon + ' ' + esc(title) + '</div><div>' + inner + '</div></div>';
 }
-
 function miniFlow(rows, dir) {
   if (!rows.length) return '<div class="p-4 text-sm text-slate-500 text-center">無資料</div>';
   const color = dir === 'buy' ? 'text-emerald-400' : 'text-rose-400';
   let html = '<div class="divide-y divide-slate-800">';
-  rows.forEach(function(r, i) {
-    html += '<div class="px-3 sm:px-4 py-2 flex items-center justify-between text-sm gap-2">'
-      + '<div class="flex items-center gap-2 min-w-0 flex-1">'
-      + '<span class="text-xs text-slate-500 w-5 sm:w-6 flex-shrink-0">' + (i + 1) + '</span>'
-      + '<span class="text-slate-300 truncate stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">' + esc(r.name) + '</span>'
-      + '<span class="text-xs text-slate-500 flex-shrink-0">' + esc(r.code) + '</span>'
-      + '</div>'
-      + '<span class="num font-semibold ' + color + ' flex-shrink-0">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</span>'
-      + '</div>';
-  });
-  html += '</div>';
-  return html;
+  rows.forEach((r, i) => { html += '<div class="px-3 sm:px-4 py-2 flex items-center justify-between text-sm gap-2"><div class="flex items-center gap-2 min-w-0 flex-1"><span class="text-xs text-slate-500 w-5 sm:w-6 flex-shrink-0">' + (i + 1) + '</span><span class="text-slate-300 truncate stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">' + esc(r.name) + '</span><span class="text-xs text-slate-500 flex-shrink-0">' + esc(r.code) + '</span></div><span class="num font-semibold ' + color + ' flex-shrink-0">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</span></div>'; });
+  return html + '</div>';
 }
-
 function miniMV(rows, total, prevMvRank) {
   if (!rows.length) return '<div class="p-4 text-sm text-slate-500 text-center">無資料</div>';
   let html = '<div class="divide-y divide-slate-800">';
-  rows.forEach(function(r, i) {
-    const todayRank = i + 1;
-    const prevRank = prevMvRank[r.code] != null ? prevMvRank[r.code] : null;
-    html += '<div class="px-3 sm:px-4 py-2 flex items-center justify-between text-sm gap-2">'
-      + '<div class="flex items-center gap-1 min-w-0 flex-1">'
-      + '<span class="text-xs text-slate-500 w-5 sm:w-6 flex-shrink-0">' + todayRank + '</span>'
-      + rankChangeHtml(todayRank, prevRank)
-      + '<span class="text-slate-300 truncate stock-link ml-1" onclick="openStockModal(\'' + esc(r.code) + '\')">' + esc(r.name) + '</span>'
-      + '<span class="text-xs text-slate-500 flex-shrink-0">' + esc(r.code) + '</span>'
-      + '</div>'
-      + '<span class="num text-amber-400 font-semibold flex-shrink-0">' + fmtM(r.market_value) + '</span>'
-      + '</div>';
-  });
-  html += '</div>';
-  return html;
+  rows.forEach((r, i) => { const todayRank = i + 1, prevRank = prevMvRank[r.code] != null ? prevMvRank[r.code] : null; html += '<div class="px-3 sm:px-4 py-2 flex items-center justify-between text-sm gap-2"><div class="flex items-center gap-1 min-w-0 flex-1"><span class="text-xs text-slate-500 w-5 sm:w-6 flex-shrink-0">' + todayRank + '</span>' + rankChangeHtml(todayRank, prevRank) + '<span class="text-slate-300 truncate stock-link ml-1" onclick="openStockModal(\'' + esc(r.code) + '\')">' + esc(r.name) + '</span><span class="text-xs text-slate-500 flex-shrink-0">' + esc(r.code) + '</span></div><span class="num text-amber-400 font-semibold flex-shrink-0">' + fmtM(r.market_value) + '</span></div>'; });
+  return html + '</div>';
 }
 
 function renderFlowTable(rows, dir) {
-  const color = dir === 'buy' ? 'emerald' : 'rose';
-  const label = dir === 'buy' ? '買超' : '賣超';
+  const color = dir === 'buy' ? 'emerald' : 'rose', label = dir === 'buy' ? '買超' : '賣超';
   const sortState = flowSort[dir];
-  const keyMap = {
-    name: function(r) { return r.name; },
-    prev_lots: function(r) { return r.prev_lots; },
-    today_lots: function(r) { return r.today_lots; },
-    diff: function(r) { return r.diff; },
-    diff_value: function(r) { return r.diff_value; },
-  };
+  const keyMap = { name: r => r.name, prev_lots: r => r.prev_lots, today_lots: r => r.today_lots, diff: r => r.diff, diff_value: r => r.diff_value };
   const sorted = sortRows(rows, sortState, keyMap);
-  function thFlow(lab, key, align) {
-    const a = align || 'right';
-    return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleFlowSort(\'' + dir + '\',\'' + key + '\')">' + esc(lab) + sortIcon(sortState, key) + '</th>';
-  }
-  const newEtfNote = NEW_ETFS.length > 0
-    ? '<div class="text-xs text-amber-400 mb-2">⚠️ 已排除新增 ETF (' + NEW_ETFS.join(', ') + ') 首日持股</div>' : '';
-  let rowsHtml = '';
-  let cardsHtml = '';
+  function thFlow(lab, key, align) { const a = align || 'right'; return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleFlowSort(\'' + dir + '\',\'' + key + '\')">' + esc(lab) + sortIcon(sortState, key) + '</th>'; }
+  const newEtfNote = NEW_ETFS.length > 0 ? '<div class="text-xs text-amber-400 mb-2">⚠️ 已排除新增 ETF (' + NEW_ETFS.join(', ') + ') 首日持股</div>' : '';
+  let rowsHtml = '', cardsHtml = '';
   sorted.forEach(function(r, i) {
-    rowsHtml += '<tr class="hover:bg-slate-800/30">'
-      + '<td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td>'
-      + '<td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">'
-      + '<div class="text-slate-200 stk-name">' + esc(r.name) + '</div>'
-      + '<div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + ' · ' + r.etf_count + '檔' + (r.has_new_etf ? '<span class="text-amber-400">(含新)</span>' : '') + '</div>'
-      + '</td>'
-      + '<td class="px-2 py-2 text-right num text-slate-400">' + fmt(r.prev_lots) + '</td>'
-      + '<td class="px-2 py-2 text-right num">' + fmt(r.today_lots) + '</td>'
-      + '<td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td>'
-      + '<td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td>'
-      + '</tr>';
-    const sign = r.diff > 0 ? '+' : '';
-    const vSign = (r.diff_value != null && r.diff_value > 0) ? '+' : '';
-    cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')">'
-      + '<div class="flex items-start justify-between gap-2 mb-2">'
-      + '<div class="min-w-0 flex-1">'
-      + '<div class="flex items-baseline gap-2 flex-wrap">'
-      + '<span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span>'
-      + '<span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span>'
-      + '<span class="text-xs text-slate-500">' + esc(r.code) + '</span>'
-      + '</div>'
-      + '<div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有' + (r.has_new_etf ? ' <span class="text-amber-400">(含新)</span>' : '') + '</div>'
-      + '</div>'
-      + '<div class="text-right flex-shrink-0">'
-      + '<div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + sign + fmt(r.diff) + '</div>'
-      + '<div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? vSign + fmtM(r.diff_value) : '-') + '</div>'
-      + '</div>'
-      + '</div>'
-      + '<div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">'
-      + '<div><div class="text-slate-500 mb-0.5">昨日</div><div class="num text-slate-300">' + fmt(r.prev_lots) + ' 張</div></div>'
-      + '<div><div class="text-slate-500 mb-0.5">今日</div><div class="num text-slate-100 font-semibold">' + fmt(r.today_lots) + ' 張</div></div>'
-      + '</div>'
-      + '</div>';
+    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')" ><div class="text-slate-200 stk-name">' + esc(r.name) + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + ' · ' + r.etf_count + '檔' + (r.has_new_etf ? '<span class="text-amber-400">(含新)</span>' : '') + '</div></td><td class="px-2 py-2 text-right num text-slate-400">' + fmt(r.prev_lots) + '</td><td class="px-2 py-2 text-right num">' + fmt(r.today_lots) + '</td><td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td><td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td></tr>';
+    cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="flex items-start justify-between gap-2 mb-2"><div class="min-w-0 flex-1"><div class="flex items-baseline gap-2 flex-wrap"><span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span><span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span><span class="text-xs text-slate-500">' + esc(r.code) + '</span></div><div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有' + (r.has_new_etf ? ' <span class="text-amber-400">(含新)</span>' : '') + '</div></div><div class="text-right flex-shrink-0"><div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</div><div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? (r.diff_value > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</div></div></div><div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800"><div><div class="text-slate-500 mb-0.5">昨日</div><div class="num text-slate-300">' + fmt(r.prev_lots) + ' 張</div></div><div><div class="text-slate-500 mb-0.5">今日</div><div class="num text-slate-100 font-semibold">' + fmt(r.today_lots) + ' 張</div></div></div></div>';
   });
-  return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">' + label + ' TOP ' + TOP_N_FLOW + ' <span class="text-xs text-slate-500 font-normal">(單位:張)</span></h2>'
-    + newEtfNote
-    + '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div>'
-    + '<div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
-    + '<table class="w-full text-sm">'
-    + '<thead class="bg-slate-800/50 text-slate-400 text-xs"><tr>'
-    + '<th class="px-2 py-2 text-left">#</th>'
-    + thFlow('股票', 'name', 'left')
-    + thFlow('昨日張', 'prev_lots')
-    + thFlow('今日張', 'today_lots')
-    + thFlow('增減', 'diff')
-    + thFlow('變動金額', 'diff_value')
-    + '</tr></thead>'
-    + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
-    + '</table></div>'
-    + '<div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
+  return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">' + label + ' TOP ' + TOP_N_FLOW + ' <span class="text-xs text-slate-500 font-normal">(單位：張)</span></h2>' + newEtfNote + '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div><div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th>' + thFlow('股票', 'name', 'left') + thFlow('昨日張', 'prev_lots') + thFlow('今日張', 'today_lots') + thFlow('增減', 'diff') + thFlow('變動金額', 'diff_value') + '</tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div><div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
 }
 
 function renderMV(rows, total, prevMvRank) {
-  const rowsWithRank = rows.map(function(r, i) {
-    return Object.assign({}, r, {
-      today_rank: i + 1,
-      prev_rank: prevMvRank[r.code] != null ? prevMvRank[r.code] : null,
-      rank_diff: prevMvRank[r.code] != null ? (prevMvRank[r.code] - (i + 1)) : null,
-    });
-  });
-  const keyMap = {
-    today_rank: function(r) { return r.today_rank; },
-    name: function(r) { return r.name; },
-    total_lots: function(r) { return r.total_lots; },
-    price: function(r) { return r.price; },
-    market_value: function(r) { return r.market_value; },
-    pct: function(r) { return r.market_value / total; },
-    etf_count: function(r) { return r.etf_count; },
-    rank_diff: function(r) { return r.rank_diff == null ? -9999 : r.rank_diff; },
-  };
+  const rowsWithRank = rows.map((r, i) => Object.assign({}, r, { today_rank: i + 1, prev_rank: prevMvRank[r.code] != null ? prevMvRank[r.code] : null, rank_diff: prevMvRank[r.code] != null ? prevMvRank[r.code] - (i + 1) : null }));
+  const keyMap = { today_rank: r => r.today_rank, name: r => r.name, total_lots: r => r.total_lots, price: r => r.price, market_value: r => r.market_value, pct: r => r.market_value / total, etf_count: r => r.etf_count, rank_diff: r => r.rank_diff == null ? -9999 : r.rank_diff };
   const sorted = sortRows(rowsWithRank, mvSort, keyMap);
-  function thMv(lab, key, align) {
-    const a = align || 'right';
-    return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleMvSort(\'' + key + '\')">' + esc(lab) + sortIcon(mvSort, key) + '</th>';
-  }
+  function thMv(lab, key, align) { const a = align || 'right'; return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleMvSort(\'' + key + '\')">' + esc(lab) + sortIcon(mvSort, key) + '</th>'; }
   let rowsHtml = '';
-  sorted.forEach(function(r) {
-    rowsHtml += '<tr class="hover:bg-slate-800/30">'
-      + '<td class="px-2 py-2 whitespace-nowrap">'
-      + '<span class="text-slate-300 font-semibold">' + r.today_rank + '</span>' + rankChangeHtml(r.today_rank, r.prev_rank)
-      + '</td>'
-      + '<td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">'
-      + '<div class="text-slate-200 stk-name">' + esc(r.name) + '</div>'
-      + '<div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + '</div>'
-      + '</td>'
-      + '<td class="px-2 py-2 text-right num">' + fmt(r.total_lots) + '</td>'
-      + '<td class="px-2 py-2 text-right num text-slate-400">' + (r.price ? fmt(r.price, 2) : '-') + '</td>'
-      + '<td class="px-2 py-2 text-right num text-amber-400 font-semibold whitespace-nowrap">' + fmtM(r.market_value) + '</td>'
-      + '<td class="px-2 py-2 text-right num text-xs text-slate-400">' + ((r.market_value / total) * 100).toFixed(2) + '%</td>'
-      + '<td class="px-2 py-2 text-center"><button onclick="openStockModal(\'' + esc(r.code) + '\')" class="bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-xs transition cursor-pointer">' + r.etf_count + '</button></td>'
-      + '</tr>';
-  });
-  return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">合計市值 TOP ' + TOP_N_MV + '</h2>'
-    + '<div class="text-xs sm:text-sm text-slate-400 mb-3">'
-    + '所有 ETF 合計市值:<span class="text-amber-400 font-semibold ml-2">' + fmtM(total) + '</span>'
-    + '<div class="text-xs text-slate-500 mt-1">💡 點擊欄位標題排序 · 排名旁箭頭 = 與前一日排名比較 (<span class="text-rose-400">↑</span>升 <span class="text-emerald-400">↓</span>降 <span class="text-amber-400">NEW</span>新進前' + TOP_N_MV + ')</div>'
-    + '</div>'
-    + '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
-    + '<table class="w-full text-sm">'
-    + '<thead class="bg-slate-800/50 text-slate-400 text-xs"><tr>'
-    + thMv('排名', 'today_rank', 'left')
-    + thMv('股票', 'name', 'left')
-    + thMv('總張數', 'total_lots')
-    + thMv('收盤價', 'price')
-    + thMv('合計市值', 'market_value')
-    + thMv('佔比', 'pct')
-    + thMv('ETF', 'etf_count', 'center')
-    + '</tr></thead>'
-    + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
-    + '</table></div>';
+  sorted.forEach(r => { rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-2 whitespace-nowrap"><span class="text-slate-300 font-semibold">' + r.today_rank + '</span>' + rankChangeHtml(r.today_rank, r.prev_rank) + '</td><td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="text-slate-200 stk-name">' + esc(r.name) + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + '</div></td><td class="px-2 py-2 text-right num">' + fmt(r.total_lots) + '</td><td class="px-2 py-2 text-right num text-slate-400">' + (r.price ? fmt(r.price, 2) : '-') + '</td><td class="px-2 py-2 text-right num text-amber-400 font-semibold whitespace-nowrap">' + fmtM(r.market_value) + '</td><td class="px-2 py-2 text-right num text-xs text-slate-400">' + ((r.market_value / total) * 100).toFixed(2) + '%</td><td class="px-2 py-2 text-center"><button onclick="openStockModal(\'' + esc(r.code) + '\')" class="bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-xs transition cursor-pointer">' + r.etf_count + '</button></td></tr>'; });
+  return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">合計市值 TOP ' + TOP_N_MV + '</h2><div class="text-xs sm:text-sm text-slate-400 mb-3">所有 ETF 合計市值：<span class="text-amber-400 font-semibold ml-2">' + fmtM(total) + '</span><div class="text-xs text-slate-500 mt-1">💡 點擊欄位標題排序 · 排名旁箭頭 = 與前一日排名比較 (<span class="text-rose-400">↑</span>升 <span class="text-emerald-400">↓</span>降 <span class="text-amber-400">NEW</span>新進前' + TOP_N_MV + ')</div></div><div class="bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr>' + thMv('排名', 'today_rank', 'left') + thMv('股票', 'name', 'left') + thMv('總張數', 'total_lots') + thMv('收盤價', 'price') + thMv('合計市值', 'market_value') + thMv('佔比', 'pct') + thMv('ETF', 'etf_count', 'center') + '</tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div>';
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 區間查詢（原多期間買賣超）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function renderMulti() {
-  if (!HISTORY_DATES && !multiLoading) {
-    multiLoading = true;
-    discoverHistoryDates().then(function() { multiLoading = false; render(); });
-  }
-
+  if (!HISTORY_DATES && !multiLoading) { multiLoading = true; discoverHistoryDates().then(() => { multiLoading = false; render(); }); }
   const presetBtns = [
-    { key: '1d',  label: '近 1 日' },
-    { key: '2d',  label: '近 2 日' },
-    { key: '5d',  label: '近 5 日' },
-    { key: 'mtd', label: 'MTD 月初' },
-    { key: 'custom', label: '自選日期' },
+    { key: '1d',    label: '近 1 日' },
+    { key: '2d',    label: '近 2 日' },
+    { key: '5d',    label: '近 5 日' },
+    { key: 'mtd',   label: '本月' },
+    { key: 'lastm', label: '上月' },
+    { key: 'custom',label: '自選日期' },
   ];
-
   let presetHtml = '';
-  presetBtns.forEach(function(b) {
-    const active = multiPreset === b.key;
-    const cls = active ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
-    presetHtml += '<button onclick="changeMultiPreset(\'' + b.key + '\')" class="px-3 py-1.5 text-xs sm:text-sm rounded ' + cls + '">' + esc(b.label) + '</button>';
-  });
-
-  const headerControls = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4 mb-4">'
-    + '<div class="flex flex-wrap gap-2 mb-3">' + presetHtml + '</div>'
-    + (multiPreset === 'custom' ? renderCustomDatePicker() : '')
-    + renderMultiPeriodInfo()
-    + '</div>';
-
+  presetBtns.forEach(b => { const active = multiPreset === b.key; presetHtml += '<button onclick="changeMultiPreset(\'' + b.key + '\')" class="px-3 py-1.5 text-xs sm:text-sm rounded ' + (active ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">' + esc(b.label) + '</button>'; });
+  const headerControls = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4 mb-4"><div class="flex flex-wrap gap-2 mb-3">' + presetHtml + '</div>' + (multiPreset === 'custom' ? renderCustomDatePicker() : '') + renderMultiPeriodInfo() + '</div>';
   if (multiLoading) return headerControls + '<div class="text-center text-slate-400 py-12">載入歷史快照中...</div>';
-
-  if (!HISTORY_DATES || HISTORY_DATES.length < 2) {
-    return headerControls + '<div class="text-center text-rose-400 py-12">'
-      + '⚠️ 歷史快照不足 (僅 ' + (HISTORY_DATES ? HISTORY_DATES.length : 0) + ' 天),無法計算期間變動。<br>'
-      + '<span class="text-xs text-slate-500">需要至少 2 天的快照才能比較</span>'
-      + '</div>';
-  }
-
+  if (!HISTORY_DATES || HISTORY_DATES.length < 2) return headerControls + '<div class="text-center text-rose-400 py-12">⚠️ 歷史快照不足 (僅 ' + (HISTORY_DATES ? HISTORY_DATES.length : 0) + ' 天)，無法計算期間變動。<br><span class="text-xs text-slate-500">需要至少 2 天的快照才能比較</span></div>';
   const range = getMultiRange();
-  if (!range.validRange) {
-    return headerControls + '<div class="text-center text-amber-400 py-12">⚠️ 期間不足或日期無效,請改選較短期間或自選日期</div>';
-  }
-
-  const startSnap = HISTORY_CACHE[range.startDate];
-  const endSnap = HISTORY_CACHE[range.endDate];
+  if (!range.validRange) return headerControls + '<div class="text-center text-amber-400 py-12">⚠️ 期間不足或日期無效，請改選較短期間或自選日期</div>';
+  const startSnap = HISTORY_CACHE[range.startDate], endSnap = HISTORY_CACHE[range.endDate];
   if (!startSnap || !endSnap) return headerControls + '<div class="text-center text-rose-400 py-12">⚠️ 無法載入該日期快照</div>';
-
   const prices = endSnap.prices || {};
   const flows = computeMultiFlow(startSnap, endSnap, prices);
-  const buy = flows.filter(function(f) { return f.diff > 0; }).sort(function(a, b) { return b.diff - a.diff; }).slice(0, MULTI_TOP_N);
-  const sell = flows.filter(function(f) { return f.diff < 0; }).sort(function(a, b) { return a.diff - b.diff; }).slice(0, MULTI_TOP_N);
-
+  const buy = flows.filter(f => f.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, MULTI_TOP_N);
+  const sell = flows.filter(f => f.diff < 0).sort((a, b) => a.diff - b.diff).slice(0, MULTI_TOP_N);
   return headerControls
-    + '<div class="flex gap-2 mb-3">'
-    + '<button onclick="toggleMultiSubTab(\'buy\')" class="px-4 py-1.5 text-sm rounded ' + (multiSubTab === 'buy' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">📈 買超 TOP ' + MULTI_TOP_N + '</button>'
-    + '<button onclick="toggleMultiSubTab(\'sell\')" class="px-4 py-1.5 text-sm rounded ' + (multiSubTab === 'sell' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">📉 賣超 TOP ' + MULTI_TOP_N + '</button>'
-    + '</div>'
+    + '<div class="flex gap-2 mb-3"><button onclick="toggleMultiSubTab(\'buy\')" class="px-4 py-1.5 text-sm rounded ' + (multiSubTab === 'buy' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">📈 買超 TOP ' + MULTI_TOP_N + '</button><button onclick="toggleMultiSubTab(\'sell\')" class="px-4 py-1.5 text-sm rounded ' + (multiSubTab === 'sell' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">📉 賣超 TOP ' + MULTI_TOP_N + '</button></div>'
     + renderMultiTable(multiSubTab === 'buy' ? buy : sell, multiSubTab);
 }
 
 function renderCustomDatePicker() {
   if (!HISTORY_DATES || HISTORY_DATES.length === 0) return '';
-  const minDate = HISTORY_DATES[HISTORY_DATES.length - 1];
-  const maxDate = HISTORY_DATES[0];
-  const startVal = multiStartDate || minDate;
-  const endVal = multiEndDate || maxDate;
-  const snappedStart = snapToHistoryDate(startVal);
-  const snappedEnd = snapToHistoryDate(endVal);
+  const minDate = HISTORY_DATES[HISTORY_DATES.length - 1], maxDate = HISTORY_DATES[0];
+  const startVal = multiStartDate || minDate, endVal = multiEndDate || maxDate;
+  const snappedStart = snapToHistoryDate(startVal), snappedEnd = snapToHistoryDate(endVal);
   const startNote = (snappedStart && snappedStart !== startVal) ? ' <span class="text-amber-400">→ 對齊至 ' + esc(snappedStart) + '</span>' : '';
   const endNote = (snappedEnd && snappedEnd !== endVal) ? ' <span class="text-amber-400">→ 對齊至 ' + esc(snappedEnd) + '</span>' : '';
-  return '<div class="flex flex-wrap items-center gap-2 mb-3 text-sm">'
-    + '<label class="text-slate-400">起日:</label>'
-    + '<input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(startVal) + '" '
-    + 'onchange="setMultiCustomDate(\'start\', this.value)" '
-    + 'class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">'
-    + startNote
-    + '<label class="text-slate-400 ml-2">迄日:</label>'
-    + '<input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(endVal) + '" '
-    + 'onchange="setMultiCustomDate(\'end\', this.value)" '
-    + 'class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">'
-    + endNote
-    + '<span class="text-xs text-slate-500 ml-2">(可用 ' + HISTORY_DATES.length + ' 天歷史: ' + esc(minDate) + ' ~ ' + esc(maxDate) + ')</span>'
-    + '</div>';
+  return '<div class="flex flex-wrap items-center gap-2 mb-3 text-sm"><label class="text-slate-400">起日:</label><input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(startVal) + '" onchange="setMultiCustomDate(\'start\', this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + startNote + '<label class="text-slate-400 ml-2">迄日:</label><input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(endVal) + '" onchange="setMultiCustomDate(\'end\', this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + endNote + '<span class="text-xs text-slate-500 ml-2">(可用 ' + HISTORY_DATES.length + ' 天歷史: ' + esc(minDate) + ' ~ ' + esc(maxDate) + ')</span></div>';
 }
 
 function getMultiRange() {
   if (!HISTORY_DATES || HISTORY_DATES.length < 2) return { validRange: false };
   const endDate = HISTORY_DATES[0];
   let startDate;
-
   if (multiPreset === '1d') startDate = getStartDateByOffset(1);
   else if (multiPreset === '2d') startDate = getStartDateByOffset(2);
   else if (multiPreset === '5d') startDate = getStartDateByOffset(5);
   else if (multiPreset === 'mtd') {
+    // 本月：從本月第一個交易日到最新日
     const parts = endDate.split('-');
     const monthStartStr = parts[0] + '-' + parts[1] + '-01';
     startDate = snapToHistoryDate(monthStartStr);
     if (startDate === endDate && HISTORY_DATES.length > 1) startDate = HISTORY_DATES[1];
   }
+  else if (multiPreset === 'lastm') {
+    // 上月：從上月第一個交易日到上月最後一個交易日
+    const parts = endDate.split('-');
+    const cy = parseInt(parts[0]), cm = parseInt(parts[1]);
+    const ly = cm === 1 ? cy - 1 : cy, lm = cm === 1 ? 12 : cm - 1;
+    const currentMonthStart = parts[0] + '-' + parts[1] + '-01';
+    const lastMonthStartStr = ly + '-' + String(lm).padStart(2, '0') + '-01';
+    // 上月最後交易日：HISTORY_DATES 中第一個 < currentMonthStart 的
+    let lastMonthEnd = null;
+    for (let i = 0; i < HISTORY_DATES.length; i++) {
+      if (HISTORY_DATES[i] < currentMonthStart) { lastMonthEnd = HISTORY_DATES[i]; break; }
+    }
+    if (!lastMonthEnd) return { validRange: false };
+    // 上月第一個交易日：HISTORY_DATES 中最早的 >= lastMonthStartStr 且 < currentMonthStart
+    let lastMonthStart = null;
+    for (let i = HISTORY_DATES.length - 1; i >= 0; i--) {
+      if (HISTORY_DATES[i] >= lastMonthStartStr && HISTORY_DATES[i] < currentMonthStart) lastMonthStart = HISTORY_DATES[i];
+    }
+    if (!lastMonthStart || lastMonthStart >= lastMonthEnd) return { validRange: false };
+    return { startDate: lastMonthStart, endDate: lastMonthEnd, validRange: true };
+  }
   else if (multiPreset === 'custom') {
-    if (!multiStartDate || !multiEndDate) return { validRange: false };
-    if (multiStartDate >= multiEndDate) return { validRange: false };
-    const snappedStart = snapToHistoryDate(multiStartDate);
-    const snappedEnd = snapToHistoryDate(multiEndDate);
+    if (!multiStartDate || !multiEndDate || multiStartDate >= multiEndDate) return { validRange: false };
+    const snappedStart = snapToHistoryDate(multiStartDate), snappedEnd = snapToHistoryDate(multiEndDate);
     if (!snappedStart || !snappedEnd || snappedStart >= snappedEnd) return { validRange: false };
     return { startDate: snappedStart, endDate: snappedEnd, validRange: true };
-  } else {
-    startDate = getStartDateByOffset(1);
-  }
+  } else startDate = getStartDateByOffset(1);
   if (!startDate || startDate === endDate) return { validRange: false };
-  return { startDate: startDate, endDate: endDate, validRange: true };
+  return { startDate, endDate, validRange: true };
 }
 
 function renderMultiPeriodInfo() {
@@ -1586,627 +850,262 @@ function renderMultiPeriodInfo() {
   const range = getMultiRange();
   if (!range.validRange) {
     let hintText = '⚠️ 請選擇有效的日期區間';
-    if (multiPreset === 'mtd') hintText = '⚠️ 本月才剛開始,歷史不足無法計算 MTD,請改用其他期間';
+    if (multiPreset === 'mtd') hintText = '⚠️ 本月才剛開始，歷史不足無法計算，請改用其他期間';
+    if (multiPreset === 'lastm') hintText = '⚠️ 上月無足夠歷史快照可供比較';
     return '<div class="text-xs text-amber-400">' + hintText + '</div>';
   }
-  const startIdx = HISTORY_DATES.indexOf(range.startDate);
-  const endIdx = HISTORY_DATES.indexOf(range.endDate);
+  const startIdx = HISTORY_DATES.indexOf(range.startDate), endIdx = HISTORY_DATES.indexOf(range.endDate);
   const tradingDays = (startIdx >= 0 && endIdx >= 0) ? Math.abs(startIdx - endIdx) + 1 : '?';
-  return '<div class="text-xs text-slate-400">'
-    + '比較區間: <span class="text-slate-200">' + esc(range.startDate) + '</span>'
-    + ' <span class="text-slate-600">→</span> '
-    + '<span class="text-slate-200">' + esc(range.endDate) + '</span>'
-    + '<span class="text-slate-500 ml-2">(含起迄共 ' + tradingDays + ' 個交易日,共 ' + HISTORY_DATES.length + ' 天歷史可用)</span>'
-    + '</div>';
+  return '<div class="text-xs text-slate-400">比較區間: <span class="text-slate-200">' + esc(range.startDate) + '</span> <span class="text-slate-600">→</span> <span class="text-slate-200">' + esc(range.endDate) + '</span><span class="text-slate-500 ml-2">(含起迄共 ' + tradingDays + ' 個交易日，共 ' + HISTORY_DATES.length + ' 天歷史可用)</span></div>';
 }
 
 function renderMultiTable(rows, dir) {
-  if (!rows.length) {
-    return '<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500">'
-      + (dir === 'buy' ? '此期間無 ETF 加碼超過 0 張的股票' : '此期間無 ETF 減碼的股票')
-      + '</div>';
-  }
-  const color = dir === 'buy' ? 'emerald' : 'rose';
-  const label = dir === 'buy' ? '加碼' : '減碼';
-  const keyMap = {
-    name: function(r) { return r.name; },
-    start_lots: function(r) { return r.start_lots; },
-    end_lots: function(r) { return r.end_lots; },
-    diff: function(r) { return r.diff; },
-    diff_value: function(r) { return r.diff_value; },
-  };
+  if (!rows.length) return '<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500">' + (dir === 'buy' ? '此期間無 ETF 加碼超過 0 張的股票' : '此期間無 ETF 減碼的股票') + '</div>';
+  const color = dir === 'buy' ? 'emerald' : 'rose', label = dir === 'buy' ? '加碼' : '減碼';
+  const keyMap = { name: r => r.name, start_lots: r => r.start_lots, end_lots: r => r.end_lots, diff: r => r.diff, diff_value: r => r.diff_value };
   const sorted = sortRows(rows, multiSort, keyMap);
-  function thMu(lab, key, align) {
-    const a = align || 'right';
-    return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleMultiSort(\'' + key + '\')">' + esc(lab) + sortIcon(multiSort, key) + '</th>';
-  }
-  let rowsHtml = '';
-  let cardsHtml = '';
+  function thMu(lab, key, align) { const a = align || 'right'; return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleMultiSort(\'' + key + '\')">' + esc(lab) + sortIcon(multiSort, key) + '</th>'; }
+  let rowsHtml = '', cardsHtml = '';
   sorted.forEach(function(r, i) {
-    const tag = r.is_new
-      ? '<span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 rounded ml-1">NEW</span>'
-      : (r.is_cleared ? '<span class="text-[10px] bg-slate-700 text-slate-300 px-1 rounded ml-1">出清</span>' : '');
-    rowsHtml += '<tr class="hover:bg-slate-800/30">'
-      + '<td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td>'
-      + '<td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">'
-      + '<div class="text-slate-200 stk-name">' + esc(r.name) + tag + '</div>'
-      + '<div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + ' · ' + r.etf_count + '檔</div>'
-      + '</td>'
-      + '<td class="px-2 py-2 text-right num text-slate-400">' + fmt(r.start_lots) + '</td>'
-      + '<td class="px-2 py-2 text-right num">' + fmt(r.end_lots) + '</td>'
-      + '<td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td>'
-      + '<td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td>'
-      + '</tr>';
-    const sign = r.diff > 0 ? '+' : '';
-    const vSign = (r.diff_value != null && r.diff_value > 0) ? '+' : '';
-    cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')">'
-      + '<div class="flex items-start justify-between gap-2 mb-2">'
-      + '<div class="min-w-0 flex-1">'
-      + '<div class="flex items-baseline gap-2 flex-wrap">'
-      + '<span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span>'
-      + '<span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span>' + tag
-      + '<span class="text-xs text-slate-500">' + esc(r.code) + '</span>'
-      + '</div>'
-      + '<div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有</div>'
-      + '</div>'
-      + '<div class="text-right flex-shrink-0">'
-      + '<div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + sign + fmt(r.diff) + '</div>'
-      + '<div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? vSign + fmtM(r.diff_value) : '-') + '</div>'
-      + '</div>'
-      + '</div>'
-      + '<div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800">'
-      + '<div><div class="text-slate-500 mb-0.5">起日</div><div class="num text-slate-300">' + fmt(r.start_lots) + ' 張</div></div>'
-      + '<div><div class="text-slate-500 mb-0.5">迄日</div><div class="num text-slate-100 font-semibold">' + fmt(r.end_lots) + ' 張</div></div>'
-      + '</div>'
-      + '</div>';
+    const tag = r.is_new ? '<span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 rounded ml-1">NEW</span>' : (r.is_cleared ? '<span class="text-[10px] bg-slate-700 text-slate-300 px-1 rounded ml-1">出清</span>' : '');
+    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="text-slate-200 stk-name">' + esc(r.name) + tag + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + ' · ' + r.etf_count + '檔</div></td><td class="px-2 py-2 text-right num text-slate-400">' + fmt(r.start_lots) + '</td><td class="px-2 py-2 text-right num">' + fmt(r.end_lots) + '</td><td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td><td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td></tr>';
+    cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="flex items-start justify-between gap-2 mb-2"><div class="min-w-0 flex-1"><div class="flex items-baseline gap-2 flex-wrap"><span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span><span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span>' + tag + '<span class="text-xs text-slate-500">' + esc(r.code) + '</span></div><div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有</div></div><div class="text-right flex-shrink-0"><div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</div><div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? (r.diff_value > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</div></div></div><div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800"><div><div class="text-slate-500 mb-0.5">起日</div><div class="num text-slate-300">' + fmt(r.start_lots) + ' 張</div></div><div><div class="text-slate-500 mb-0.5">迄日</div><div class="num text-slate-100 font-semibold">' + fmt(r.end_lots) + ' 張</div></div></div></div>';
   });
-  return '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div>'
-    + '<div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto">'
-    + '<table class="w-full text-sm">'
-    + '<thead class="bg-slate-800/50 text-slate-400 text-xs"><tr>'
-    + '<th class="px-2 py-2 text-left">#</th>'
-    + thMu('股票', 'name', 'left')
-    + thMu('起日張', 'start_lots')
-    + thMu('迄日張', 'end_lots')
-    + thMu(label, 'diff')
-    + thMu('變動金額', 'diff_value')
-    + '</tr></thead>'
-    + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
-    + '</table></div>'
-    + '<div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
+  return '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div><div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th>' + thMu('股票', 'name', 'left') + thMu('起日張', 'start_lots') + thMu('迄日張', 'end_lots') + thMu(label, 'diff') + thMu('變動金額', 'diff_value') + '</tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div><div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
 }
 
+// ── ETF 明細 ──
 function renderETF() {
   const etfKeys = Object.keys(DATA.today);
   const isMulti = !!(selectedEtfMulti && selectedEtfMulti.length > 1);
-  if (!isMulti) {
-    if (!selectedEtf || !DATA.today[selectedEtf]) selectedEtf = etfKeys[0];
-  }
-
+  if (!isMulti) { if (!selectedEtf || !DATA.today[selectedEtf]) selectedEtf = etfKeys[0]; }
   let displayName, displayCode, displayHoldingsDate, isNewEtf, rawRows, totalMV, etfsInScope;
-
   if (isMulti) {
-    etfsInScope = selectedEtfMulti.filter(function(k) { return DATA.today[k]; });
-    displayCode = '自選 ' + etfsInScope.length + ' 檔';
-    displayName = '組合: ' + etfsInScope.join(', ');
-    displayHoldingsDate = null;
-    isNewEtf = false;
-
+    etfsInScope = selectedEtfMulti.filter(k => DATA.today[k]);
+    displayCode = '自選 ' + etfsInScope.length + ' 檔'; displayName = '組合: ' + etfsInScope.join(', ');
+    displayHoldingsDate = null; isNewEtf = false;
     const merged = {};
-    etfsInScope.forEach(function(k) {
-      const etfData = DATA.today[k];
-      if (!etfData) return;
-      const prevHoldings = (DATA.prev && DATA.prev[k] && DATA.prev[k].holdings) || [];
-      const prevMap = {};
-      prevHoldings.forEach(function(h) { prevMap[h.code] = h.lots; });
+    etfsInScope.forEach(k => {
+      const etfData = DATA.today[k]; if (!etfData) return;
+      const prevMap = {}; ((DATA.prev && DATA.prev[k] && DATA.prev[k].holdings) || []).forEach(h => { prevMap[h.code] = h.lots; });
       const isThisNew = NEW_ETFS.indexOf(k) !== -1;
-      (etfData.holdings || []).forEach(function(h) {
-        if (!merged[h.code]) {
-          merged[h.code] = { code: h.code, name: h.name, lots: 0, prev_lots: 0, weight_sum: 0, etf_count: 0, etfs: [], has_new_etf: false };
-        }
+      (etfData.holdings || []).forEach(h => {
+        if (!merged[h.code]) merged[h.code] = { code: h.code, name: h.name, lots: 0, prev_lots: 0, weight_sum: 0, etf_count: 0, etfs: [], has_new_etf: false };
         merged[h.code].lots += h.lots;
         merged[h.code].prev_lots += isThisNew ? h.lots : (prevMap[h.code] || 0);
         merged[h.code].weight_sum += (h.weight || 0);
-        merged[h.code].etf_count += 1;
-        merged[h.code].etfs.push(k);
+        merged[h.code].etf_count += 1; merged[h.code].etfs.push(k);
         if (isThisNew) merged[h.code].has_new_etf = true;
       });
     });
-    rawRows = Object.values(merged).map(function(r) {
-      const price = (DATA.prices && DATA.prices[r.code]) || null;
-      return {
-        code: r.code, name: r.name, lots: r.lots,
-        weight: r.weight_sum / etfsInScope.length,
-        prev_lots: r.prev_lots, diff: r.lots - r.prev_lots,
-        price: price, mv: price ? r.lots * 1000 * price : null,
-        etf_count_in_scope: r.etf_count, has_new_etf: r.has_new_etf,
-      };
-    });
-    totalMV = rawRows.reduce(function(s, r) { return s + (r.mv || 0); }, 0);
+    rawRows = Object.values(merged).map(r => { const price = (DATA.prices && DATA.prices[r.code]) || null; return { code: r.code, name: r.name, lots: r.lots, weight: r.weight_sum / etfsInScope.length, prev_lots: r.prev_lots, diff: r.lots - r.prev_lots, price, mv: price ? r.lots * 1000 * price : null, etf_count_in_scope: r.etf_count, has_new_etf: r.has_new_etf }; });
+    totalMV = rawRows.reduce((s, r) => s + (r.mv || 0), 0);
   } else {
-    const today = DATA.today[selectedEtf];
-    const prev = DATA.prev && DATA.prev[selectedEtf];
-    const prevMap = {};
-    ((prev && prev.holdings) || []).forEach(function(h) { prevMap[h.code] = h.lots; });
+    const today = DATA.today[selectedEtf], prev = DATA.prev && DATA.prev[selectedEtf];
+    const prevMap = {}; ((prev && prev.holdings) || []).forEach(h => { prevMap[h.code] = h.lots; });
     isNewEtf = NEW_ETFS.indexOf(selectedEtf) !== -1;
-    rawRows = ((today && today.holdings) || []).map(function(h) {
-      const price = (DATA.prices && DATA.prices[h.code]) || null;
-      return {
-        code: h.code, name: h.name, lots: h.lots, weight: h.weight,
-        prev_lots: prevMap[h.code] || 0,
-        diff: isNewEtf ? 0 : h.lots - (prevMap[h.code] || 0),
-        price: price, mv: price ? h.lots * 1000 * price : null,
-      };
-    });
-    totalMV = rawRows.reduce(function(s, r) { return s + (r.mv || 0); }, 0);
-    displayName = today.name;
-    displayCode = selectedEtf;
-    displayHoldingsDate = today.holdings_date;
-    etfsInScope = [selectedEtf];
+    rawRows = ((today && today.holdings) || []).map(h => { const price = (DATA.prices && DATA.prices[h.code]) || null; return { code: h.code, name: h.name, lots: h.lots, weight: h.weight, prev_lots: prevMap[h.code] || 0, diff: isNewEtf ? 0 : h.lots - (prevMap[h.code] || 0), price, mv: price ? h.lots * 1000 * price : null }; });
+    totalMV = rawRows.reduce((s, r) => s + (r.mv || 0), 0);
+    displayName = today.name; displayCode = selectedEtf; displayHoldingsDate = today.holdings_date; etfsInScope = [selectedEtf];
   }
-
-  const keyMap = {
-    name: function(r) { return r.name; },
-    weight: function(r) { return r.weight; },
-    prev_lots: function(r) { return r.prev_lots; },
-    lots: function(r) { return r.lots; },
-    diff: function(r) { return r.diff; },
-    price: function(r) { return r.price; },
-    mv: function(r) { return r.mv; },
-  };
-  const defaultSort = isMulti
-    ? [...rawRows].sort(function(a, b) { return b.lots - a.lots; })
-    : [...rawRows].sort(function(a, b) { return b.weight - a.weight; });
+  const keyMap = { name: r => r.name, weight: r => r.weight, prev_lots: r => r.prev_lots, lots: r => r.lots, diff: r => r.diff, price: r => r.price, mv: r => r.mv };
+  const defaultSort = isMulti ? [...rawRows].sort((a, b) => b.lots - a.lots) : [...rawRows].sort((a, b) => b.weight - a.weight);
   const rows = (etfSort.key && etfSort.dir) ? sortRows(rawRows, etfSort, keyMap) : defaultSort;
-
-  function thEtf(lab, key, align) {
-    const a = align || 'right';
-    return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleEtfSort(\'' + key + '\')">' + esc(lab) + sortIcon(etfSort, key) + '</th>';
-  }
-
+  function thEtf(lab, key, align) { const a = align || 'right'; return '<th class="px-2 py-2 text-' + a + ' sort-th" onclick="toggleEtfSort(\'' + key + '\')">' + esc(lab) + sortIcon(etfSort, key) + '</th>'; }
   const newTag = !isMulti && isNewEtf ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">新增首日</span>' : '';
-  const newNote = !isMulti && isNewEtf ? '<div class="text-xs text-amber-400 mt-1">⚠️ 此 ETF 今日首次納入追蹤,持股變動不計入買賣超</div>' : '';
+  const newNote = !isMulti && isNewEtf ? '<div class="text-xs text-amber-400 mt-1">⚠️ 此 ETF 今日首次納入追蹤，持股變動不計入買賣超</div>' : '';
   const multiTag = isMulti ? ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">合計視角</span>' : '';
-
-  let modeToggleBtn;
-  if (etfMultiSelectMode) {
-    const selectedCount = selectedEtfMulti ? selectedEtfMulti.length : 0;
-    modeToggleBtn = '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-emerald-600 hover:bg-emerald-500 text-white whitespace-nowrap font-semibold col-span-2 sm:col-span-1">'
-      + '✅ 完成多選 (' + selectedCount + ')'
-      + '</button>';
-  } else {
-    modeToggleBtn = '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-sky-700 hover:bg-sky-600 text-white whitespace-nowrap font-semibold col-span-2 sm:col-span-1">'
-      + '🔗 多選模式'
-      + '</button>';
-  }
-
+  let modeToggleBtn = etfMultiSelectMode
+    ? '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-emerald-600 hover:bg-emerald-500 text-white whitespace-nowrap font-semibold">✅ 完成多選 (' + (selectedEtfMulti ? selectedEtfMulti.length : 0) + ')</button>'
+    : '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-sky-700 hover:bg-sky-600 text-white whitespace-nowrap font-semibold">🔗 多選模式</button>';
   let etfBtnsHtml = modeToggleBtn;
-  etfKeys.forEach(function(k) {
+  etfKeys.forEach(k => {
     const isNew = NEW_ETFS.indexOf(k) !== -1;
-    let isActive;
-    if (etfMultiSelectMode) isActive = selectedEtfMulti && selectedEtfMulti.indexOf(k) !== -1;
-    else if (isMulti) isActive = selectedEtfMulti.indexOf(k) !== -1;
-    else isActive = k === selectedEtf;
-    let base, checkedClass = '';
-    if (etfMultiSelectMode) {
-      base = isActive ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
-      checkedClass = isActive ? ' etf-btn-checked' : '';
-    } else {
-      base = isActive
-        ? (isMulti ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white')
-        : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
-      if (isActive && isMulti) checkedClass = ' etf-btn-checked';
-    }
-    const badge = isNew ? ' <span class="text-[10px] bg-amber-400/30 px-1 rounded">新</span>' : '';
-    etfBtnsHtml += '<button data-etf="' + esc(k) + '" class="etf-btn px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ' + base + checkedClass + ' whitespace-nowrap">' + esc(k) + badge + '</button>';
+    let isActive = etfMultiSelectMode ? (selectedEtfMulti && selectedEtfMulti.indexOf(k) !== -1) : (isMulti ? selectedEtfMulti.indexOf(k) !== -1 : k === selectedEtf);
+    let base = etfMultiSelectMode ? (isActive ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') : (isActive ? (isMulti ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white') : 'bg-slate-800 text-slate-300 hover:bg-slate-700');
+    const checkedClass = (etfMultiSelectMode && isActive) || (!etfMultiSelectMode && isActive && isMulti) ? ' etf-btn-checked' : '';
+    etfBtnsHtml += '<button data-etf="' + esc(k) + '" class="etf-btn px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ' + base + checkedClass + ' whitespace-nowrap">' + esc(k) + (isNew ? ' <span class="text-[10px] bg-amber-400/30 px-1 rounded">新</span>' : '') + '</button>';
   });
-
-  let multiHintHtml;
-  if (etfMultiSelectMode) {
-    const selectedCount = selectedEtfMulti ? selectedEtfMulti.length : 0;
-    multiHintHtml = '<div class="text-xs text-sky-300 mb-3 flex flex-wrap items-center gap-2 bg-sky-950/30 border border-sky-800/50 rounded p-2">'
-      + '<span>🔗 多選模式中 — 點擊 ETF 鈕加入/移除組合 (已選 ' + selectedCount + ' 檔)</span>'
-      + '<button onclick="clearEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white">清空</button>'
-      + '<button onclick="selectAllEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white">全選</button>'
-      + '<span class="text-slate-500 ml-auto">完成後按「✅ 完成多選」</span>'
-      + '</div>';
-  } else if (isMulti) {
-    multiHintHtml = '<div class="text-xs text-sky-300 mb-3 flex flex-wrap items-center gap-2 bg-sky-950/30 border border-sky-800/50 rounded p-2">'
-      + '<span>📊 多檔合計顯示中 — 已選 ' + selectedEtfMulti.length + ' 檔: ' + selectedEtfMulti.join(', ') + '</span>'
-      + '<button onclick="toggleEtfMultiMode()" class="px-2 py-0.5 rounded bg-sky-700 hover:bg-sky-600 text-white">編輯組合</button>'
-      + '<button onclick="clearEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white">清除</button>'
-      + '</div>';
-  } else {
-    multiHintHtml = '<div class="text-xs text-slate-500 mb-3">💡 想看多檔合計持股? 點上方「🔗 多選模式」鈕</div>';
-  }
-
+  let multiHintHtml = etfMultiSelectMode
+    ? '<div class="text-xs text-sky-300 mb-3 flex flex-wrap items-center gap-2 bg-sky-950/30 border border-sky-800/50 rounded p-2"><span>🔗 多選模式中 — 點擊 ETF 鈕加入/移除組合 (已選 ' + (selectedEtfMulti ? selectedEtfMulti.length : 0) + ' 檔)</span><button onclick="clearEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white">清空</button><button onclick="selectAllEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white">全選</button><span class="text-slate-500 ml-auto">完成後按「✅ 完成多選」</span></div>'
+    : (isMulti
+      ? '<div class="text-xs text-sky-300 mb-3 flex flex-wrap items-center gap-2 bg-sky-950/30 border border-sky-800/50 rounded p-2"><span>📊 多檔合計顯示中 — 已選 ' + selectedEtfMulti.length + ' 檔: ' + selectedEtfMulti.join(', ') + '</span><button onclick="toggleEtfMultiMode()" class="px-2 py-0.5 rounded bg-sky-700 hover:bg-sky-600 text-white">編輯組合</button><button onclick="clearEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white">清除</button></div>'
+      : '<div class="text-xs text-slate-500 mb-3">💡 想看多檔合計持股？點上方「🔗 多選模式」鈕</div>');
   let rowsHtml = '';
-  rows.forEach(function(r, i) {
+  rows.forEach((r, i) => {
     const diffColor = (!isMulti && isNewEtf) ? 'text-amber-400' : (r.diff > 0 ? 'text-emerald-400' : (r.diff < 0 ? 'text-rose-400' : 'text-slate-500'));
     const diffText = (!isMulti && isNewEtf) ? '首日' : (r.diff !== 0 ? (r.diff > 0 ? '+' : '') + fmt(r.diff) : '—');
     const weightCell = isMulti ? r.etf_count_in_scope + '/' + etfsInScope.length + '檔' : r.weight.toFixed(2) + '%';
-    const weightTitle = isMulti ? '在自選 ' + etfsInScope.length + ' 檔中,共有 ' + r.etf_count_in_scope + ' 檔持有此股票' : '';
-    rowsHtml += '<tr class="hover:bg-slate-800/30">'
-      + '<td class="px-2 py-1.5 text-slate-500">' + (i + 1) + '</td>'
-      + '<td class="px-2 py-1.5 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')">'
-      + '<div class="text-slate-200 stk-name">' + esc(r.name) + (isMulti && r.has_new_etf ? '<span class="text-amber-400 text-xs ml-1">(含新)</span>' : '') + '</div>'
-      + '<div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + '</div>'
-      + '</td>'
-      + '<td class="px-2 py-1.5 text-right num"' + (weightTitle ? ' title="' + esc(weightTitle) + '"' : '') + '>' + weightCell + '</td>'
-      + '<td class="px-2 py-1.5 text-right num text-slate-400">' + (!isMulti && isNewEtf ? '—' : fmt(r.prev_lots)) + '</td>'
-      + '<td class="px-2 py-1.5 text-right num">' + fmt(r.lots) + '</td>'
-      + '<td class="px-2 py-1.5 text-right num ' + diffColor + '">' + diffText + '</td>'
-      + '<td class="px-2 py-1.5 text-right num text-slate-400">' + (r.price ? fmt(r.price, 2) : '-') + '</td>'
-      + '<td class="px-2 py-1.5 text-right num text-amber-400 whitespace-nowrap">' + fmtM(r.mv) + '</td>';
-    if (!isMulti) {
-      rowsHtml += '<td class="px-2 py-1.5 text-center">'
-        + '<button onclick="openHistoryModal(\'' + esc(selectedEtf) + '\',\'' + esc(r.code) + '\')" '
-        + 'title="查看 ' + esc(r.name) + ' 在此 ETF 的歷史持股" '
-        + 'class="bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-xs transition cursor-pointer whitespace-nowrap">📈 歷史</button>'
-        + '</td>';
-    } else {
-      rowsHtml += '<td class="px-2 py-1.5 text-center text-slate-600 text-xs">—</td>';
-    }
+    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-1.5 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-1.5 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="text-slate-200 stk-name">' + esc(r.name) + (isMulti && r.has_new_etf ? '<span class="text-amber-400 text-xs ml-1">(含新)</span>' : '') + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + '</div></td><td class="px-2 py-1.5 text-right num">' + weightCell + '</td><td class="px-2 py-1.5 text-right num text-slate-400">' + (!isMulti && isNewEtf ? '—' : fmt(r.prev_lots)) + '</td><td class="px-2 py-1.5 text-right num">' + fmt(r.lots) + '</td><td class="px-2 py-1.5 text-right num ' + diffColor + '">' + diffText + '</td><td class="px-2 py-1.5 text-right num text-slate-400">' + (r.price ? fmt(r.price, 2) : '-') + '</td><td class="px-2 py-1.5 text-right num text-amber-400 whitespace-nowrap">' + fmtM(r.mv) + '</td>';
+    if (!isMulti) rowsHtml += '<td class="px-2 py-1.5 text-center"><button onclick="openHistoryModal(\'' + esc(selectedEtf) + '\',\'' + esc(r.code) + '\')" title="查看 ' + esc(r.name) + ' 在此 ETF 的歷史持股" class="bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-xs transition cursor-pointer whitespace-nowrap">📈 歷史</button></td>';
+    else rowsHtml += '<td class="px-2 py-1.5 text-center text-slate-600 text-xs">—</td>';
     rowsHtml += '</tr>';
   });
-
-  const weightColLabel = isMulti ? '持有檔數' : '比例';
-  const headerInfo = isMulti
-    ? '自選 ' + etfsInScope.length + ' 檔合計 · ' + rows.length + ' 檔個股 · 合計市值 ' + fmtM(totalMV)
-    : '資料日期 ' + esc(displayHoldingsDate || '-') + ' · ' + rows.length + ' 檔 · 合計市值 ' + fmtM(totalMV);
-
-  let bodyHtml;
-  if (etfMultiSelectMode && (!selectedEtfMulti || selectedEtfMulti.length === 0)) {
-    bodyHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">'
-      + '<div class="text-sky-300 mb-2">🔗 多選模式 — 請點選要合計的 ETF</div>'
-      + '<div class="text-xs text-slate-500">至少選 1 檔, 完成後按上方「✅ 完成多選」</div>'
-      + '</div>';
-  } else if (etfMultiSelectMode && selectedEtfMulti && selectedEtfMulti.length === 1) {
-    bodyHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">'
-      + '<div class="text-sky-300 mb-2">🔗 已選 1 檔 (' + selectedEtfMulti[0] + ')</div>'
-      + '<div class="text-xs text-slate-500">至少再選 1 檔才能看合計, 或按「✅ 完成多選」直接看單檔</div>'
-      + '</div>';
-  } else {
-    bodyHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4">'
-      + '<div class="flex items-start justify-between flex-wrap gap-2 mb-3">'
-      + '<div class="min-w-0">'
-      + '<div class="font-semibold text-sm sm:text-base">' + esc(displayName) + (isMulti ? '' : ' (' + esc(displayCode) + ')') + newTag + multiTag + '</div>'
-      + '<div class="text-xs text-slate-400 mt-0.5">' + headerInfo + '</div>'
-      + newNote
-      + '</div></div>'
-      + '<div class="text-xs text-slate-500 mb-2">💡 點擊欄位標題排序</div>'
-      + '<div class="overflow-x-auto -mx-3 sm:mx-0">'
-      + '<table class="w-full text-sm">'
-      + '<thead class="bg-slate-800/50 text-slate-400 text-xs"><tr>'
-      + '<th class="px-2 py-2 text-left">#</th>'
-      + thEtf('股票', 'name', 'left')
-      + thEtf(weightColLabel, 'weight')
-      + thEtf('前日', 'prev_lots')
-      + thEtf('今日', 'lots')
-      + thEtf('增減', 'diff')
-      + thEtf('收盤', 'price')
-      + thEtf('市值', 'mv')
-      + '<th class="px-2 py-2 text-center">歷史</th>'
-      + '</tr></thead>'
-      + '<tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody>'
-      + '</table></div></div>';
-  }
-
-  return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">ETF 明細</h2>'
-    + '<div class="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 mb-3">' + etfBtnsHtml + '</div>'
-    + multiHintHtml
-    + bodyHtml;
+  const bodyHtml = (etfMultiSelectMode && (!selectedEtfMulti || selectedEtfMulti.length === 0))
+    ? '<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center"><div class="text-sky-300 mb-2">🔗 多選模式 — 請點選要合計的 ETF</div><div class="text-xs text-slate-500">至少選 1 檔，完成後按上方「✅ 完成多選」</div></div>'
+    : (etfMultiSelectMode && selectedEtfMulti && selectedEtfMulti.length === 1
+      ? '<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center"><div class="text-sky-300 mb-2">🔗 已選 1 檔 (' + selectedEtfMulti[0] + ')</div><div class="text-xs text-slate-500">至少再選 1 檔才能看合計，或按「✅ 完成多選」直接看單檔</div></div>'
+      : '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4"><div class="flex items-start justify-between flex-wrap gap-2 mb-3"><div class="min-w-0"><div class="font-semibold text-sm sm:text-base">' + esc(displayName) + (isMulti ? '' : ' (' + esc(displayCode) + ')') + newTag + multiTag + '</div><div class="text-xs text-slate-400 mt-0.5">' + (isMulti ? '自選 ' + etfsInScope.length + ' 檔合計 · ' + rows.length + ' 檔個股 · 合計市值 ' + fmtM(totalMV) : '資料日期 ' + esc(displayHoldingsDate || '-') + ' · ' + rows.length + ' 檔 · 合計市值 ' + fmtM(totalMV)) + '</div>' + newNote + '</div></div><div class="text-xs text-slate-500 mb-2">💡 點擊欄位標題排序</div><div class="overflow-x-auto -mx-3 sm:mx-0"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th>' + thEtf('股票', 'name', 'left') + thEtf(isMulti ? '持有檔數' : '比例', 'weight') + thEtf('前日', 'prev_lots') + thEtf('今日', 'lots') + thEtf('增減', 'diff') + thEtf('收盤', 'price') + thEtf('市值', 'mv') + '<th class="px-2 py-2 text-center">歷史</th></tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div></div>');
+  return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">ETF 明細</h2><div class="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 mb-3">' + etfBtnsHtml + '</div>' + multiHintHtml + bodyHtml;
 }
-
 function bindEtf() {
-  document.querySelectorAll('.etf-btn').forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
+  document.querySelectorAll('.etf-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
       const code = btn.dataset.etf;
-      if (etfMultiSelectMode) {
-        if (!selectedEtfMulti) selectedEtfMulti = [code];
-        else {
-          const idx = selectedEtfMulti.indexOf(code);
-          if (idx >= 0) selectedEtfMulti.splice(idx, 1);
-          else selectedEtfMulti.push(code);
-        }
-      } else {
-        selectedEtf = code;
-        selectedEtfMulti = null;
-      }
+      if (etfMultiSelectMode) { if (!selectedEtfMulti) selectedEtfMulti = [code]; else { const idx = selectedEtfMulti.indexOf(code); if (idx >= 0) selectedEtfMulti.splice(idx, 1); else selectedEtfMulti.push(code); } }
+      else { selectedEtf = code; selectedEtfMulti = null; }
       render();
     });
   });
 }
-
 function toggleEtfMultiMode() {
-  if (etfMultiSelectMode) {
-    etfMultiSelectMode = false;
-    if (!selectedEtfMulti || selectedEtfMulti.length === 0) selectedEtfMulti = null;
-    else if (selectedEtfMulti.length === 1) {
-      selectedEtf = selectedEtfMulti[0];
-      selectedEtfMulti = null;
-    }
-  } else {
-    etfMultiSelectMode = true;
-    if (!selectedEtfMulti) selectedEtfMulti = selectedEtf ? [selectedEtf] : [];
-  }
+  if (etfMultiSelectMode) { etfMultiSelectMode = false; if (!selectedEtfMulti || selectedEtfMulti.length === 0) selectedEtfMulti = null; else if (selectedEtfMulti.length === 1) { selectedEtf = selectedEtfMulti[0]; selectedEtfMulti = null; } }
+  else { etfMultiSelectMode = true; if (!selectedEtfMulti) selectedEtfMulti = selectedEtf ? [selectedEtf] : []; }
   render();
 }
+function clearEtfMulti() { selectedEtfMulti = etfMultiSelectMode ? [] : null; render(); }
+function selectAllEtfMulti() { selectedEtfMulti = Object.keys(DATA.today); render(); }
 
-function clearEtfMulti() {
-  selectedEtfMulti = [];
-  if (!etfMultiSelectMode) selectedEtfMulti = null;
-  render();
-}
-
-function selectAllEtfMulti() {
-  selectedEtfMulti = Object.keys(DATA.today);
-  render();
-}
-
-function applyEtfMultiGroup(groupType, groupKey) {
-  let codes;
-  if (groupType === 'size') codes = getEtfsBySize(groupKey);
-  else if (groupType === 'issuer') codes = getEtfsByIssuer(groupKey);
-  else codes = [];
-  codes = codes.filter(function(c) { return DATA.today[c]; });
-  if (codes.length === 0) return;
-  selectedEtfMulti = codes;
-  render();
-}
-
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 個股查詢（ETF 篩選改用與 ETF 明細相同的按鈕式多選）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function renderStock(todayAgg, prevAgg) {
+  // ── 日期選擇器 ──
   let dateSelectorHtml = '';
   if (HISTORY_DATES && HISTORY_DATES.length > 0) {
-    const minDate = HISTORY_DATES[HISTORY_DATES.length - 1];
-    const maxDate = HISTORY_DATES[0];
-    const isToday = !stockQueryDate;
-    const inputVal = stockQueryDate || maxDate;
-    dateSelectorHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
-      + '<span class="text-slate-400">📅 查詢日期:</span>'
-      + '<button onclick="setStockQueryDate(\'__today__\')" class="px-2 py-1 rounded ' + (isToday ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">最新</button>'
-      + '<input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(inputVal) + '" '
-      + 'onchange="setStockQueryDate(this.value)" '
-      + 'class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">'
-      + (stockQueryDate ? '<span class="text-amber-400">查詢中: ' + esc(stockQueryDate) + '</span>' : '<span class="text-slate-500">(顯示最新資料 ' + esc(DATA.today_date) + ')</span>')
-      + '<span class="text-xs text-slate-500 ml-auto">可用 ' + HISTORY_DATES.length + ' 天歷史</span>'
-      + '</div>';
+    const minDate = HISTORY_DATES[HISTORY_DATES.length - 1], maxDate = HISTORY_DATES[0], isToday = !stockQueryDate, inputVal = stockQueryDate || maxDate;
+    dateSelectorHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm"><span class="text-slate-400">📅 查詢日期:</span><button onclick="setStockQueryDate(\'__today__\')" class="px-2 py-1 rounded ' + (isToday ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">最新</button><input type="date" min="' + esc(minDate) + '" max="' + esc(maxDate) + '" value="' + esc(inputVal) + '" onchange="setStockQueryDate(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs">' + (stockQueryDate ? '<span class="text-amber-400">查詢中: ' + esc(stockQueryDate) + '</span>' : '<span class="text-slate-500">(顯示最新資料 ' + esc(DATA.today_date) + ')</span>') + '<span class="text-xs text-slate-500 ml-auto">可用 ' + HISTORY_DATES.length + ' 天歷史</span></div>';
   } else {
-    dateSelectorHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-2 flex items-center gap-2 text-xs sm:text-sm">'
-      + '<span class="text-slate-400">📅 想查歷史日期? </span>'
-      + '<button onclick="ensureHistoryForStockQuery()" class="px-2 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white">' + (stockQueryLoading ? '載入中...' : '載入歷史') + '</button>'
-      + '<span class="text-slate-500">(顯示最新資料 ' + esc(DATA.today_date) + ')</span>'
-      + '</div>';
+    dateSelectorHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-2 flex items-center gap-2 text-xs sm:text-sm"><span class="text-slate-400">📅 想查歷史日期？</span><button onclick="ensureHistoryForStockQuery()" class="px-2 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white">' + (stockQueryLoading ? '載入中...' : '載入歷史') + '</button><span class="text-slate-500">(顯示最新資料 ' + esc(DATA.today_date) + ')</span></div>';
   }
 
-  const queryData = getStockQuerySnap(stockQueryDate);
-  let querySnapshot, queryPrices, queryDateLabel, queryPrevSnapshot, queryPrevLabel;
-  if (queryData) {
-    querySnapshot = queryData.snap.today || {};
-    queryPrices = queryData.snap.prices || {};
-    queryDateLabel = stockQueryDate || DATA.today_date;
-    queryPrevSnapshot = (queryData.prevSnap && queryData.prevSnap.today) || {};
-    queryPrevLabel = queryData.prevDate;
-  } else {
-    querySnapshot = DATA.today || {};
-    queryPrices = DATA.prices || {};
-    queryDateLabel = DATA.today_date;
-    queryPrevSnapshot = DATA.prev || {};
-    queryPrevLabel = DATA.prev_date;
-  }
-
-  const allEtfCodes = Object.keys(querySnapshot);
-  let activeEtfCodes;
-  if (!stockQueryEtfFilter) activeEtfCodes = null;
-  else if (typeof stockQueryEtfFilter === 'string') activeEtfCodes = [stockQueryEtfFilter];
-  else if (Array.isArray(stockQueryEtfFilter)) activeEtfCodes = stockQueryEtfFilter;
-  else activeEtfCodes = null;
-
-  let filteredSnapshot = querySnapshot;
-  let filteredPrevSnapshot = queryPrevSnapshot;
-  if (activeEtfCodes) {
-    filteredSnapshot = {};
-    filteredPrevSnapshot = {};
-    activeEtfCodes.forEach(function(ec) {
-      if (querySnapshot[ec]) filteredSnapshot[ec] = querySnapshot[ec];
-      if (queryPrevSnapshot[ec]) filteredPrevSnapshot[ec] = queryPrevSnapshot[ec];
-    });
-  }
-
+  // ── ETF 篩選（按鈕式，與 ETF 明細多選一致）──
   const allEtfCodesSorted = Object.keys(DATA.today).sort();
+  const isAll = !stockQueryEtfFilter;
+  const isMultiFilter = Array.isArray(stockQueryEtfFilter);
+  const isSingleFilter = typeof stockQueryEtfFilter === 'string';
   let etfFilterHtml;
-  if (stockQueryCustomMode) {
-    let checklistHtml = '';
-    allEtfCodesSorted.forEach(function(k) {
-      const checked = stockQueryCustomSelected.indexOf(k) !== -1;
-      const etfName = (DATA.today[k] && DATA.today[k].name) || k;
-      checklistHtml += '<label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-800/50 cursor-pointer text-xs">'
-        + '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="toggleStockQueryCustomEtf(\'' + esc(k) + '\')" class="cursor-pointer">'
-        + '<span class="text-slate-300">' + esc(k) + '</span>'
-        + '<span class="text-slate-500 truncate">' + esc(etfName) + '</span>'
-        + '</label>';
+
+  if (stockQueryMultiSelectMode) {
+    // ── 多選模式中 ──
+    const selectedCount = stockQueryCustomSelected.length;
+    let etfBtnsHtml = '<button onclick="applyStockQueryMulti()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-emerald-600 hover:bg-emerald-500 text-white whitespace-nowrap font-semibold">✅ 完成多選 (' + selectedCount + ')</button>';
+    allEtfCodesSorted.forEach(k => {
+      const isActive = stockQueryCustomSelected.indexOf(k) !== -1;
+      const base = isActive ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+      const checkedClass = isActive ? ' etf-btn-checked' : '';
+      etfBtnsHtml += '<button onclick="toggleStockQueryCustomEtf(\'' + esc(k) + '\')" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ' + base + checkedClass + ' whitespace-nowrap relative">' + esc(k) + '</button>';
     });
     etfFilterHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-3">'
-      + '<div class="flex flex-wrap items-center gap-2 mb-2 text-xs sm:text-sm">'
-      + '<span class="text-slate-400">✏️ 自選 ETF 組合 (' + stockQueryCustomSelected.length + ' / ' + allEtfCodesSorted.length + ')</span>'
-      + '<button onclick="selectAllStockQueryCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">全選</button>'
-      + '<button onclick="clearStockQueryCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">全不選</button>'
-      + '<button onclick="applyStockQueryCustom()" class="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs ml-auto">套用</button>'
-      + '<button onclick="cancelStockQueryCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">取消</button>'
-      + '</div>'
-      + '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 max-h-48 overflow-y-auto bg-slate-950/50 p-2 rounded">' + checklistHtml + '</div>'
+      + '<div class="text-xs text-sky-300 mb-2 flex flex-wrap items-center gap-2 bg-sky-950/30 border border-sky-800/50 rounded p-2"><span>🔗 多選模式中 (已選 ' + selectedCount + ' 檔)</span><button onclick="selectAllStockQueryCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white text-xs">全選</button><button onclick="clearStockQueryCustom()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white text-xs">清空</button><span class="text-slate-500 ml-auto">完成後按「✅ 完成多選」</span></div>'
+      + '<div class="flex flex-wrap gap-1.5">' + etfBtnsHtml + '</div>'
       + '</div>';
   } else {
-    const isAll = !stockQueryEtfFilter;
-    const isCustom = Array.isArray(stockQueryEtfFilter);
-    const isSingle = typeof stockQueryEtfFilter === 'string';
-    const allBtnCls = isAll ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
-    const customBtnCls = isCustom ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
-    let singleOptions = '<option value="__placeholder__">— 選擇單檔 ETF —</option>';
-    allEtfCodesSorted.forEach(function(k) {
-      const sel = isSingle && stockQueryEtfFilter === k ? 'selected' : '';
-      const etfName = (DATA.today[k] && DATA.today[k].name) || k;
-      singleOptions += '<option value="' + esc(k) + '" ' + sel + '>' + esc(k) + ' ' + esc(etfName) + '</option>';
+    // ── 一般模式 ──
+    let etfBtnsHtml = '';
+    // 多選模式切換按鈕
+    if (isMultiFilter) {
+      etfBtnsHtml += '<button onclick="toggleStockQueryMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-emerald-600 hover:bg-emerald-500 text-white whitespace-nowrap font-semibold">✅ 多選中 (' + stockQueryEtfFilter.length + ')</button>';
+    } else {
+      etfBtnsHtml += '<button onclick="toggleStockQueryMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-sky-700 hover:bg-sky-600 text-white whitespace-nowrap font-semibold">🔗 多選模式</button>';
+    }
+    // 全部合計按鈕
+    etfBtnsHtml += '<button onclick="setStockQueryEtfFilter(\'__all__\')" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ' + (isAll ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + ' whitespace-nowrap">全部合計</button>';
+    // 個別 ETF 按鈕
+    allEtfCodesSorted.forEach(k => {
+      const isActive = isMultiFilter ? stockQueryEtfFilter.indexOf(k) !== -1 : (isSingleFilter && stockQueryEtfFilter === k);
+      const base = isActive ? (isMultiFilter ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white') : 'bg-slate-800 text-slate-300 hover:bg-slate-700';
+      const checkedClass = isActive && isMultiFilter ? ' etf-btn-checked' : '';
+      etfBtnsHtml += '<button onclick="setStockQueryEtfFilter(\'' + esc(k) + '\')" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ' + base + checkedClass + ' whitespace-nowrap relative">' + esc(k) + '</button>';
     });
-    etfFilterHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-3">'
-      + '<div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm">'
-      + '<span class="text-slate-400">📊 ETF 視角:</span>'
-      + '<button onclick="setStockQueryEtfFilter(\'__all__\')" class="px-3 py-1 rounded ' + allBtnCls + '">全部 ETF 合計</button>'
-      + '<button onclick="setStockQueryEtfFilter(\'__custom__\')" class="px-3 py-1 rounded ' + customBtnCls + '">✏️ 自選組合' + (isCustom ? ' (' + stockQueryEtfFilter.length + ')' : '') + '</button>'
-      + '<span class="text-slate-500 mx-1">|</span>'
-      + '<span class="text-slate-400 text-xs">單檔:</span>'
-      + '<select onchange="if (this.value !== \'__placeholder__\') setStockQueryEtfFilter(this.value)" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-100 text-xs sm:text-sm">' + singleOptions + '</select>'
-      + '</div>';
-    if (isCustom && stockQueryEtfFilter.length > 0) {
-      etfFilterHtml += '<div class="text-xs text-slate-500 mt-2">'
-        + '已選: ' + stockQueryEtfFilter.map(esc).join(', ')
-        + ' <button onclick="setStockQueryEtfFilter(\'__custom__\')" class="ml-2 text-amber-400 hover:text-amber-300 underline">編輯</button>'
-        + '</div>';
-    } else if (isSingle) {
+    etfFilterHtml = '<div class="bg-slate-900 border border-slate-800 rounded-lg p-2 sm:p-3 mb-3"><div class="flex flex-wrap gap-1.5 mb-1.5">' + etfBtnsHtml + '</div>';
+    if (isMultiFilter) {
+      etfFilterHtml += '<div class="text-xs text-sky-300 flex flex-wrap items-center gap-2 bg-sky-950/30 border border-sky-800/50 rounded p-2 mt-1"><span>📊 多選視角: ' + stockQueryEtfFilter.map(esc).join(', ') + '</span><button onclick="toggleStockQueryMultiMode()" class="px-2 py-0.5 rounded bg-sky-700 hover:bg-sky-600 text-white">編輯</button><button onclick="setStockQueryEtfFilter(\'__all__\')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white">清除</button></div>';
+    } else if (isSingleFilter) {
       const etfName = (DATA.today[stockQueryEtfFilter] && DATA.today[stockQueryEtfFilter].name) || '';
-      etfFilterHtml += '<div class="text-xs text-amber-400 mt-2">只看 ' + esc(stockQueryEtfFilter) + ' ' + esc(etfName) + ' 的持股</div>';
+      etfFilterHtml += '<div class="text-xs text-amber-400 mt-1">只看 ' + esc(stockQueryEtfFilter) + ' ' + esc(etfName) + ' 的持股</div>';
     }
     etfFilterHtml += '</div>';
   }
 
+  // ── 資料查詢 ──
+  const queryData = getStockQuerySnap(stockQueryDate);
+  let querySnapshot, queryPrices, queryDateLabel, queryPrevSnapshot, queryPrevLabel;
+  if (queryData) {
+    querySnapshot = queryData.snap.today || {}; queryPrices = queryData.snap.prices || {};
+    queryDateLabel = stockQueryDate || DATA.today_date;
+    queryPrevSnapshot = (queryData.prevSnap && queryData.prevSnap.today) || {}; queryPrevLabel = queryData.prevDate;
+  } else {
+    querySnapshot = DATA.today || {}; queryPrices = DATA.prices || {};
+    queryDateLabel = DATA.today_date; queryPrevSnapshot = DATA.prev || {}; queryPrevLabel = DATA.prev_date;
+  }
+  let activeEtfCodes = isAll ? null : (isSingleFilter ? [stockQueryEtfFilter] : (isMultiFilter ? stockQueryEtfFilter : null));
+  let filteredSnapshot = querySnapshot, filteredPrevSnapshot = queryPrevSnapshot;
+  if (activeEtfCodes) {
+    filteredSnapshot = {}; filteredPrevSnapshot = {};
+    activeEtfCodes.forEach(ec => { if (querySnapshot[ec]) filteredSnapshot[ec] = querySnapshot[ec]; if (queryPrevSnapshot[ec]) filteredPrevSnapshot[ec] = queryPrevSnapshot[ec]; });
+  }
   const filteredAgg = aggregate(filteredSnapshot, queryPrices);
   const filteredPrevAgg = aggregate(filteredPrevSnapshot, queryPrices);
-
   const all = Object.values(filteredAgg);
   const filtered = stockSearch.trim()
-    ? all.filter(function(s) { return s.code.indexOf(stockSearch) !== -1 || s.name.indexOf(stockSearch) !== -1; })
-    : all.sort(function(a, b) { return b.total_lots - a.total_lots; }).slice(0, 30);
+    ? all.filter(s => s.code.indexOf(stockSearch) !== -1 || s.name.indexOf(stockSearch) !== -1)
+    : all.sort((a, b) => b.total_lots - a.total_lots).slice(0, 30);
 
   let listHtml = '';
-  filtered.forEach(function(s) {
-    listHtml += '<button data-code="' + esc(s.code) + '" class="stk-btn w-full px-3 sm:px-4 py-2 text-left flex items-center justify-between gap-2 hover:bg-slate-800/50 ' + (selectedStock === s.code ? 'bg-slate-800' : '') + '">'
-      + '<div class="min-w-0"><div class="text-slate-200 text-sm truncate">' + esc(s.name) + '</div><div class="text-xs text-slate-500">' + esc(s.code) + ' · ' + s.etf_count + '檔持有</div></div>'
-      + '<div class="text-right flex-shrink-0"><div class="text-sm num">' + fmt(s.total_lots) + '張</div><div class="text-xs text-amber-400 num">' + fmtM(s.market_value) + '</div></div>'
-      + '</button>';
-  });
+  filtered.forEach(s => { listHtml += '<button data-code="' + esc(s.code) + '" class="stk-btn w-full px-3 sm:px-4 py-2 text-left flex items-center justify-between gap-2 hover:bg-slate-800/50 ' + (selectedStock === s.code ? 'bg-slate-800' : '') + '"><div class="min-w-0"><div class="text-slate-200 text-sm truncate">' + esc(s.name) + '</div><div class="text-xs text-slate-500">' + esc(s.code) + ' · ' + s.etf_count + '檔持有</div></div><div class="text-right flex-shrink-0"><div class="text-sm num">' + fmt(s.total_lots) + '張</div><div class="text-xs text-amber-400 num">' + fmtM(s.market_value) + '</div></div></button>'; });
   if (!filtered.length) listHtml = '<div class="p-8 text-center text-sm text-slate-500">無符合</div>';
-
-  let listTitle;
-  if (stockSearch.trim()) listTitle = '符合 ' + filtered.length + ' 檔';
-  else if (typeof stockQueryEtfFilter === 'string') listTitle = stockQueryEtfFilter + ' 持股 TOP 30';
-  else if (Array.isArray(stockQueryEtfFilter)) listTitle = '自選 ' + stockQueryEtfFilter.length + ' 檔合計持股 TOP 30';
-  else listTitle = '合計持股 TOP 30';
+  let listTitle = stockSearch.trim() ? '符合 ' + filtered.length + ' 檔' : (isSingleFilter ? stockQueryEtfFilter + ' 持股 TOP 30' : (isMultiFilter ? '自選 ' + stockQueryEtfFilter.length + ' 檔合計持股 TOP 30' : '合計持股 TOP 30'));
 
   const detail = selectedStock && filteredAgg[selectedStock];
   const prevDetail = selectedStock && filteredPrevAgg[selectedStock];
-
   let detailHtml;
   if (!detail) {
     if (selectedStock) {
       const stkName = todayAgg[selectedStock] ? todayAgg[selectedStock].name : selectedStock;
-      let reason;
-      if (typeof stockQueryEtfFilter === 'string') reason = esc(stockQueryEtfFilter) + ' 在 ' + esc(queryDateLabel) + ' 沒有持有此股';
-      else if (Array.isArray(stockQueryEtfFilter)) reason = '自選 ' + stockQueryEtfFilter.length + ' 檔在 ' + esc(queryDateLabel) + ' 都沒有持有此股';
-      else reason = esc(stkName) + ' 在 ' + esc(queryDateLabel) + ' 沒有任何 ETF 持有';
-      detailHtml = '<div class="text-center py-12">'
-        + '<div class="text-amber-400 mb-2">⚠️ ' + reason + '</div>'
-        + '<div class="text-xs text-slate-500">換個視角、日期或股票試試</div>'
-        + '</div>';
+      let reason = isSingleFilter ? esc(stockQueryEtfFilter) + ' 在 ' + esc(queryDateLabel) + ' 沒有持有此股' : (isMultiFilter ? '自選 ' + stockQueryEtfFilter.length + ' 檔在 ' + esc(queryDateLabel) + ' 都沒有持有此股' : esc(stkName) + ' 在 ' + esc(queryDateLabel) + ' 沒有任何 ETF 持有');
+      detailHtml = '<div class="text-center py-12"><div class="text-amber-400 mb-2">⚠️ ' + reason + '</div><div class="text-xs text-slate-500">換個視角、日期或股票試試</div></div>';
     } else {
       detailHtml = '<div class="text-center text-sm text-slate-500 py-12">選擇左側個股查看詳情</div>';
     }
   } else {
-    const prevLots = (prevDetail && prevDetail.total_lots) || 0;
-    const diff = detail.total_lots - prevLots;
+    const prevLots = (prevDetail && prevDetail.total_lots) || 0, diff = detail.total_lots - prevLots;
     const diffColor = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-rose-400' : '');
-    const dateBadge = stockQueryDate
-      ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">' + esc(queryDateLabel) + '</span>'
-      : '';
-    let etfBadge = '';
-    if (typeof stockQueryEtfFilter === 'string') etfBadge = ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">' + esc(stockQueryEtfFilter) + ' 視角</span>';
-    else if (Array.isArray(stockQueryEtfFilter)) etfBadge = ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">自選 ' + stockQueryEtfFilter.length + ' 檔視角</span>';
-    const todayLabel = stockQueryDate ? '當日合計' : '今日合計';
-    const prevLabel = queryPrevLabel ? '前一筆 (' + esc(queryPrevLabel) + ')' : '前日合計';
-    const mvLabel = stockQueryEtfFilter ? '篩選後市值' : '合計市值';
-    const etfListLabel = (typeof stockQueryEtfFilter === 'string')
-      ? '此 ETF 對該股票:'
-      : (Array.isArray(stockQueryEtfFilter)
-          ? '自選 ' + stockQueryEtfFilter.length + ' 檔的持股 (實際持有 ' + detail.etfs.length + ' 檔):'
-          : '持有此股的 ETF (' + detail.etfs.length + '檔):');
-
+    const dateBadge = stockQueryDate ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">' + esc(queryDateLabel) + '</span>' : '';
+    let etfBadge = isSingleFilter ? ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">' + esc(stockQueryEtfFilter) + ' 視角</span>' : (isMultiFilter ? ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">自選 ' + stockQueryEtfFilter.length + ' 檔視角</span>' : '');
+    const etfListLabel = isSingleFilter ? '此 ETF 對該股票:' : (isMultiFilter ? '自選 ' + stockQueryEtfFilter.length + ' 檔的持股 (實際持有 ' + detail.etfs.length + ' 檔):' : '持有此股的 ETF (' + detail.etfs.length + '檔):');
     let etfRowsHtml = '';
-    detail.etfs.sort(function(a, b) { return b.lots - a.lots; }).forEach(function(e) {
+    detail.etfs.sort((a, b) => b.lots - a.lots).forEach(e => {
       const isNew = !stockQueryDate && NEW_ETFS.indexOf(e.etf) !== -1;
-      const prevEtfHoldings = stockQueryDate
-        ? ((queryData && queryData.prevSnap && queryData.prevSnap.today && queryData.prevSnap.today[e.etf] && queryData.prevSnap.today[e.etf].holdings) || [])
-        : ((DATA.prev && DATA.prev[e.etf] && DATA.prev[e.etf].holdings) || []);
-      const pv = prevEtfHoldings.find(function(h) { return h.code === detail.code; });
+      const prevEtfHoldings = stockQueryDate ? ((queryData && queryData.prevSnap && queryData.prevSnap.today && queryData.prevSnap.today[e.etf] && queryData.prevSnap.today[e.etf].holdings) || []) : ((DATA.prev && DATA.prev[e.etf] && DATA.prev[e.etf].holdings) || []);
+      const pv = prevEtfHoldings.find(h => h.code === detail.code);
       const d = e.lots - (pv ? pv.lots : 0);
       const dColor = isNew ? 'text-amber-400' : (d > 0 ? 'text-emerald-400' : (d < 0 ? 'text-rose-400' : 'text-slate-500'));
       const dText = isNew ? '首日' : (d !== 0 ? (d > 0 ? '+' : '') + fmt(d) : '—');
-      etfRowsHtml += '<div class="flex items-center justify-between bg-slate-800/50 rounded px-2 py-1.5 text-xs sm:text-sm ' + (isNew ? 'border-l-2 border-amber-500' : '') + ' gap-2">'
-        + '<div class="min-w-0">'
-        + '<span class="text-slate-300">' + esc(e.etf_name) + '</span>'
-        + '<span class="text-xs text-slate-500 ml-1">' + esc(e.etf) + '</span>'
-        + (isNew ? '<span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 rounded ml-1">新</span>' : '')
-        + '</div>'
-        + '<div class="flex items-center gap-2 text-xs flex-shrink-0">'
-        + '<span class="text-slate-400">' + e.weight + '%</span>'
-        + '<span class="num text-slate-200">' + fmt(e.lots) + '張</span>'
-        + '<span class="num font-semibold w-14 sm:w-16 text-right ' + dColor + '">' + dText + '</span>'
-        + '</div></div>';
+      etfRowsHtml += '<div class="flex items-center justify-between bg-slate-800/50 rounded px-2 py-1.5 text-xs sm:text-sm ' + (isNew ? 'border-l-2 border-amber-500' : '') + ' gap-2"><div class="min-w-0"><span class="text-slate-300">' + esc(e.etf_name) + '</span><span class="text-xs text-slate-500 ml-1">' + esc(e.etf) + '</span>' + (isNew ? '<span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 rounded ml-1">新</span>' : '') + '</div><div class="flex items-center gap-2 text-xs flex-shrink-0"><span class="text-slate-400">' + e.weight + '%</span><span class="num text-slate-200">' + fmt(e.lots) + '張</span><span class="num font-semibold w-14 sm:w-16 text-right ' + dColor + '">' + dText + '</span></div></div>';
     });
-
-    detailHtml = '<div class="flex items-center justify-between mb-3 gap-2">'
-      + '<div class="min-w-0">'
-      + '<div class="font-bold text-base sm:text-lg truncate">' + esc(detail.name) + dateBadge + etfBadge + '</div>'
-      + '<div class="text-xs text-slate-400">' + esc(detail.code) + ' · 收盤 ' + (detail.price ? fmt(detail.price, 2) : 'N/A') + '</div>'
-      + '</div>'
-      + '<div class="text-right flex-shrink-0"><div class="text-xs text-slate-500">' + mvLabel + '</div><div class="text-amber-400 font-bold">' + fmtM(detail.market_value) + '</div></div>'
-      + '</div>'
-      + '<div class="grid grid-cols-3 gap-2 mb-4 text-center">'
-      + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">' + todayLabel + '</div><div class="num font-semibold text-sm">' + fmt(detail.total_lots) + '張</div></div>'
-      + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">' + prevLabel + '</div><div class="num text-sm">' + fmt(prevLots) + '張</div></div>'
-      + '<div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">變動</div><div class="num font-semibold text-sm ' + diffColor + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</div></div>'
-      + '</div>'
-      + '<div class="text-xs text-slate-400 mb-2">' + etfListLabel + '</div>'
-      + '<div class="space-y-1">' + etfRowsHtml + '</div>';
+    detailHtml = '<div class="flex items-center justify-between mb-3 gap-2"><div class="min-w-0"><div class="font-bold text-base sm:text-lg truncate">' + esc(detail.name) + dateBadge + etfBadge + '</div><div class="text-xs text-slate-400">' + esc(detail.code) + ' · 收盤 ' + (detail.price ? fmt(detail.price, 2) : 'N/A') + '</div></div><div class="text-right flex-shrink-0"><div class="text-xs text-slate-500">' + (isSingleFilter || isMultiFilter ? '篩選後市值' : '合計市值') + '</div><div class="text-amber-400 font-bold">' + fmtM(detail.market_value) + '</div></div></div><div class="grid grid-cols-3 gap-2 mb-4 text-center"><div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">' + (stockQueryDate ? '當日合計' : '今日合計') + '</div><div class="num font-semibold text-sm">' + fmt(detail.total_lots) + '張</div></div><div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">' + (queryPrevLabel ? '前一筆 (' + esc(queryPrevLabel) + ')' : '前日合計') + '</div><div class="num text-sm">' + fmt(prevLots) + '張</div></div><div class="bg-slate-800 rounded p-2"><div class="text-xs text-slate-400">變動</div><div class="num font-semibold text-sm ' + diffColor + '">' + (diff > 0 ? '+' : '') + fmt(diff) + '</div></div></div><div class="text-xs text-slate-400 mb-2">' + etfListLabel + '</div><div class="space-y-1">' + etfRowsHtml + '</div>';
   }
 
   return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">個股查詢</h2>'
-    + dateSelectorHtml
-    + etfFilterHtml
+    + dateSelectorHtml + etfFilterHtml
     + '<input id="stock-search" value="' + esc(stockSearch) + '" placeholder="輸入股票代號或名稱 (如 2330 或 台積電)" class="w-full md:max-w-md bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm mb-4 focus:outline-none focus:border-amber-500">'
-    + '<div class="grid md:grid-cols-2 gap-3 sm:gap-4">'
-    + '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden max-h-[60vh] md:max-h-[70vh] overflow-y-auto">'
-    + '<div class="px-4 py-2 text-xs text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-900">' + esc(listTitle) + '</div>'
-    + '<div class="divide-y divide-slate-800">' + listHtml + '</div>'
-    + '</div>'
-    + '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4">' + detailHtml + '</div>'
-    + '</div>';
+    + '<div class="grid md:grid-cols-2 gap-3 sm:gap-4"><div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden max-h-[60vh] md:max-h-[70vh] overflow-y-auto"><div class="px-4 py-2 text-xs text-slate-400 border-b border-slate-800 sticky top-0 bg-slate-900">' + esc(listTitle) + '</div><div class="divide-y divide-slate-800">' + listHtml + '</div></div><div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4">' + detailHtml + '</div></div>';
 }
-
 function bindStock(todayAgg, prevAgg) {
   const inp = document.getElementById('stock-search');
-  if (inp) inp.addEventListener('input', function(e) {
-    stockSearch = e.target.value;
-    render();
-    setTimeout(function() {
-      const i = document.getElementById('stock-search');
-      if (i) { i.focus(); i.setSelectionRange(stockSearch.length, stockSearch.length); }
-    }, 0);
-  });
-  document.querySelectorAll('.stk-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() { selectedStock = btn.dataset.code; render(); });
-  });
+  if (inp) inp.addEventListener('input', e => { stockSearch = e.target.value; render(); setTimeout(() => { const i = document.getElementById('stock-search'); if (i) { i.focus(); i.setSelectionRange(stockSearch.length, stockSearch.length); } }, 0); });
+  document.querySelectorAll('.stk-btn').forEach(btn => btn.addEventListener('click', () => { selectedStock = btn.dataset.code; render(); }));
 }
 
-document.querySelectorAll('.tab-btn').forEach(function(btn) {
-  btn.addEventListener('click', function() { currentTab = btn.dataset.tab; render(); });
-});
+document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => { currentTab = btn.dataset.tab; render(); }));
 
 function loadData() {
   fetch('./latest.json?t=' + Date.now())
-    .then(function(r) { if (!r.ok) throw new Error('404'); return r.json(); })
-    .then(function(d) { DATA = d; render(); })
-    .catch(function() { DATA = null; render(); });
+    .then(r => { if (!r.ok) throw new Error('404'); return r.json(); })
+    .then(d => { DATA = d; render(); })
+    .catch(() => { DATA = null; render(); });
 }
 </script>
-
 </body>
 </html>
