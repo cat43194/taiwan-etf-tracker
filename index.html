@@ -767,6 +767,8 @@ function renderMulti() {
   const presetBtns = [
     { key: '1d',    label: '近 1 日' },
     { key: '2d',    label: '近 2 日' },
+    { key: '3d',    label: '近 3 日' },
+    { key: '4d',    label: '近 4 日' },
     { key: '5d',    label: '近 5 日' },
     { key: 'mtd',   label: '本月' },
     { key: 'lastm', label: '上月' },
@@ -806,6 +808,8 @@ function getMultiRange() {
   let startDate;
   if (multiPreset === '1d') startDate = getStartDateByOffset(1);
   else if (multiPreset === '2d') startDate = getStartDateByOffset(2);
+  else if (multiPreset === '3d') startDate = getStartDateByOffset(3);
+  else if (multiPreset === '4d') startDate = getStartDateByOffset(4);
   else if (multiPreset === '5d') startDate = getStartDateByOffset(5);
   else if (multiPreset === 'mtd') {
     // 本月：從本月第一個交易日到最新日
