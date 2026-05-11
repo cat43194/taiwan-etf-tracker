@@ -585,7 +585,8 @@ function renderModalHoldings(stock, etfs) {
   // 找出今日已全數出清（前日有持股、今日已不在）的 ETF
   const clearedEtfs = [];
   if (DATA.prev) {
-    Object.entries(DATA.prev).forEach(function([etfCode, etfData]) {
+    Object.entries(DATA.prev).forEach(function(entry) {
+      var etfCode = entry[0], etfData = entry[1];
       if (etfs.find(e => e.etf === etfCode)) return; // 今日仍持有，跳過
       if (NEW_ETFS.indexOf(etfCode) !== -1) return;  // 新 ETF 跳過
       const prevHolding = (etfData.holdings || []).find(h => h.code === stock.code);
@@ -605,12 +606,10 @@ function renderModalHoldings(stock, etfs) {
     etfRowsHtml += '<tr class="hover:bg-slate-800/30 ' + (isNew ? 'bg-amber-950/20' : '') + '"><td class="px-2 sm:px-3 py-2 text-slate-500">' + (i + 1) + '</td><td class="px-2 sm:px-3 py-2"><div class="text-slate-200 text-xs sm:text-sm">' + esc(e.etf_name) + (isNew ? ' <span class="text-[10px] bg-amber-600/30 text-amber-300 px-1 py-0.5 rounded ml-1">新</span>' : '') + '</div><div class="text-[10px] sm:text-xs text-slate-500">' + esc(e.etf) + '</div></td><td class="px-2 sm:px-3 py-2 text-right num font-semibold text-slate-100">' + fmt(e.lots) + '</td><td class="px-2 sm:px-3 py-2 text-right num text-xs ' + diffColor + '">' + diffText + '</td><td class="px-2 sm:px-3 py-2 text-right num text-xs text-slate-400">' + e.weight + '%</td></tr>';
   });
 
-  // 出清列
-  clearedEtfs.forEach(function(e, i) {
-    etfRowsHtml += '<tr class="hover:bg-slate-800/30 bg-rose-950/20"><td class="px-2 sm:px-3 py-2 text-slate-500">' + (etfs.length + i + 1) + '</td><td class="px-2 sm:px-3 py-2"><div class="text-slate-400 text-xs sm:text-sm line-through">' + esc(e.etf_name) + ' <span class="text-[10px] bg-rose-700/40 text-rose-300 px-1 py-0.5 rounded no-underline" style="text-decoration:none">今日出清</span></div><div class="text-[10px] sm:text-xs text-slate-600">' + esc(e.etf) + '</div></td><td class="px-2 sm:px-3 py-2 text-right num text-slate-500">0</td><td class="px-2 sm:px-3 py-2 text-right num text-xs text-rose-400">-' + fmt(e.prev_lots) + '</td><td class="px-2 sm:px-3 py-2 text-right num text-xs text-slate-600">—</td></tr>';
-  });
-
-  const clearedNote = clearedEtfs.length > 0 ? '<div class="px-3 py-1.5 text-xs text-rose-400/80 bg-rose-950/20 border-t border-slate-800">⚠️ 以下 ' + clearedEtfs.length + ' 檔 ETF 今日已全數出清此股</div>' : '';
+  var clearedTotal = clearedEtfs.reduce(function(s, e) { return s + e.prev_lots; }, 0);
+  var clearedNote = clearedEtfs.length > 0
+    ? '<div class="px-3 py-2 text-xs text-rose-400 bg-rose-950/20 border-t border-slate-800">⚠️ 另有 ' + clearedEtfs.length + ' 檔 ETF 今日全數出清，合計減少 <b>-' + fmt(clearedTotal) + '</b> 張（' + clearedEtfs.map(function(e){ return esc(e.etf); }).join('、') + '）</div>'
+    : '';
 
   return '<div class="overflow-y-auto flex-1"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs sticky top-0"><tr><th class="px-2 sm:px-3 py-2 text-left">#</th><th class="px-2 sm:px-3 py-2 text-left">ETF</th><th class="px-2 sm:px-3 py-2 text-right">持有張數</th><th class="px-2 sm:px-3 py-2 text-right">前日變動</th><th class="px-2 sm:px-3 py-2 text-right">佔比</th></tr></thead><tbody class="divide-y divide-slate-800">' + etfRowsHtml + '</tbody></table>' + clearedNote + '</div>';
 }
