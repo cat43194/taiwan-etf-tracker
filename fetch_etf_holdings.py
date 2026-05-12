@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 台股主動式ETF 每日持股 + 收盤價抓取器 (GitHub Actions 版)
-v11:
- - 🆕 出清股票補抓: 把「前日有持股、今日已出清」的股票也加進收盤價抓取清單
-   (修復: 全面出清的股票在前端「變動金額」會顯示 -, 因為沒抓收盤價)
+v12:
+ - 🆕 名稱補回: 當 MoneyDJ 沒有股票代號時，用股票名稱比對
+   當日其他 ETF 持股 + 前日快照，自動補回代號與持股
+   (修復: MoneyDJ 補上代號後不會誤判成買超)
+ - 出清股票補抓: 把「前日有持股、今日已出清」的股票也加進收盤價抓取清單
  - 失敗 ETF 單獨重試 (最多 2 輪, 每輪間隔 15 秒)
  - 用 MoneyDJ 的 holdings_date 眾數當檔名日期, 避免 cron 延遲跨日
  - 防呆: holdings_date 全 None / 未開盤日 / ETF 數量異常
@@ -77,11 +79,9 @@ def fetch_etf_holdings(etf_code, session, retries=3):
         if m:
             etf_name = m.group(1).strip()
 
-    # holdings_date 解析: 接受「資料日期」後 0-5 個非數字字元(全形冒號、空白等)
     m = re.search(r"資料日期[^\d]{0,5}(\d{4}/\d{1,2}/\d{1,2})", text_all)
     holdings_date = m.group(1) if m else None
 
-    # Debug: 日期抓不到時印出診斷資訊
     if holdings_date is None:
         print(f"\n      [DATE DEBUG {etf_code}] 抓不到 holdings_date")
         print(f"      [DATE DEBUG {etf_code}] 頁面長度={len(r.text)}, 狀態={r.status_code}")
@@ -205,6 +205,93 @@ def fetch_etf_holdings(etf_code, session, retries=3):
 
 
 # =============================================================
+# 🆕 v12: 名稱補回
+# 用當日其他 ETF 持股 + 前日快照建立 名稱→代號 對照表
+# 對「無代號格式」的 skipped rows 嘗試補回
+# =============================================================
+def build_name_code_map(all_etf_data, prev_snapshot):
+    """建立 名稱 → 股票代號 對照表"""
+    name_map = {}
+
+    # 1. 前日快照（較低優先級）
+    if prev_snapshot:
+        for etf_data in (prev_snapshot.get("today") or {}).values():
+            for h in (etf_data.get("holdings") or []):
+                name = h.get("name", "").strip().rstrip("*").strip()
+                code = h.get("code", "")
+                if name and code:
+                    name_map[name] = code
+
+    # 2. 當日已成功解析的持股（較高優先級，覆蓋前日）
+    for etf_data in all_etf_data.values():
+        for h in etf_data.get("holdings", []):
+            name = h.get("name", "").strip().rstrip("*").strip()
+            code = h.get("code", "")
+            if name and code:
+                name_map[name] = code
+
+    return name_map
+
+
+def recover_skipped_by_name(all_etf_data, name_code_map, all_stock_codes):
+    """
+    對所有「無代號格式」的 skipped rows，嘗試用名稱查代號補回持股。
+    查到 + 能解析張數 → 補回 holdings，從 skipped_rows 移除。
+    查不到 → 保留在 skipped_rows（接受一天沒資料）。
+    """
+    total_recovered = 0
+    recovered_detail = []
+
+    for etf_code, etf_data in all_etf_data.items():
+        new_skipped = []
+        for row in etf_data.get("skipped_rows", []):
+            if row["reason"] != "無代號格式":
+                new_skipped.append(row)
+                continue
+
+            name = row["raw_text"].strip().rstrip("*").strip()
+            code = name_code_map.get(name)
+
+            if not code:
+                # 查不到，保留 skipped
+                new_skipped.append(row)
+                continue
+
+            # 嘗試解析張數
+            try:
+                weight = float(row["weight_raw"])
+                shares = int(row["shares_raw"].replace(",", "").replace(" ", ""))
+                lots = shares // 1000
+                if lots < 1:
+                    new_skipped.append(row)
+                    continue
+            except (ValueError, AttributeError):
+                new_skipped.append(row)
+                continue
+
+            # 補回持股
+            etf_data["holdings"].append({
+                "code": code,
+                "name": name,
+                "lots": lots,
+                "weight": round(weight, 2),
+            })
+            all_stock_codes.add(code)
+            total_recovered += 1
+            recovered_detail.append(f"{etf_code} '{name}' → {code} ({lots} 張)")
+            # 不加回 new_skipped
+
+        etf_data["skipped_rows"] = new_skipped
+
+    if total_recovered > 0:
+        print(f"\n  🔧 名稱補回: 成功補回 {total_recovered} 筆")
+        for d in recovered_detail:
+            print(f"     ✓ {d}")
+
+    return total_recovered
+
+
+# =============================================================
 # yfinance (.TW -> .TWO)
 # =============================================================
 def fetch_prices_bulk_yfinance(codes):
@@ -274,7 +361,6 @@ def fetch_all_tpex_prices(session, headers):
     global _TPEX_CACHE
     if _TPEX_CACHE is not None:
         return _TPEX_CACHE
-
     url = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
     try:
         r = session.get(url, headers=headers, timeout=20)
@@ -306,7 +392,6 @@ def fetch_all_twse_prices(session, headers):
     global _TWSE_CACHE
     if _TWSE_CACHE is not None:
         return _TWSE_CACHE
-
     for back in range(7):
         d = datetime.now() - timedelta(days=back)
         date_str = d.strftime("%Y%m%d")
@@ -318,7 +403,6 @@ def fetch_all_twse_prices(session, headers):
             data = r.json()
             if data.get("stat") != "OK":
                 continue
-
             tables = data.get("tables", [])
             if not tables:
                 rows = data.get("data9") or data.get("data8") or []
@@ -333,16 +417,13 @@ def fetch_all_twse_prices(session, headers):
                     continue
                 rows = target.get("data", [])
                 fields = target.get("fields", [])
-
             if not rows or not fields:
                 continue
-
             try:
                 idx_code = fields.index("證券代號")
                 idx_close = fields.index("收盤價")
             except ValueError:
                 continue
-
             result = {}
             for row in rows:
                 try:
@@ -353,14 +434,12 @@ def fetch_all_twse_prices(session, headers):
                     result[code] = round(float(close), 2)
                 except (ValueError, IndexError, AttributeError):
                     continue
-
             if result:
                 _TWSE_CACHE = result
                 print(f"  [TWSE MI_INDEX] {date_str} 建 cache: {len(result)} 檔上市股")
                 return result
         except Exception:
             continue
-
     print(f"  [TWSE MI_INDEX] 7 天內皆失敗")
     _TWSE_CACHE = {}
     return _TWSE_CACHE
@@ -376,11 +455,9 @@ def fetch_price_yahoo_html(code, session, headers):
             r = session.get(url, headers=headers, timeout=15)
             if r.status_code != 200:
                 continue
-
             m = re.search(r'"regularMarketPrice"\s*:\s*\{[^}]*?"raw"\s*:\s*([\d.]+)', r.text)
             if m:
                 return round(float(m.group(1)), 2), suffix
-
             soup = BeautifulSoup(r.text, "html.parser")
             span = soup.find("span", class_=re.compile(r"Fz\(32px\)"))
             if span:
@@ -400,34 +477,25 @@ def fetch_price_yahoo_html(code, session, headers):
 def fetch_all_prices(all_stock_codes, session, headers):
     codes = sorted(all_stock_codes)
     print(f"\n[價格抓取] 目標 {len(codes)} 檔")
-
     prices = fetch_prices_bulk_yfinance(codes)
     missing = [c for c in codes if c not in prices]
     print(f"  小計: {len(prices)}/{len(codes)}  缺 {len(missing)} 檔")
-
     if not missing:
         return prices
-
     print(f"\n  [官方 API 批次] 建 cache...")
     twse_map = fetch_all_twse_prices(session, headers)
     tpex_map = fetch_all_tpex_prices(session, headers)
-
     hit_twse, hit_tpex = 0, 0
     for c in list(missing):
         if c in twse_map:
-            prices[c] = twse_map[c]
-            hit_twse += 1
+            prices[c] = twse_map[c]; hit_twse += 1
         elif c in tpex_map:
-            prices[c] = tpex_map[c]
-            hit_tpex += 1
+            prices[c] = tpex_map[c]; hit_tpex += 1
     print(f"  TWSE API 補: {hit_twse} 檔, TPEx API 補: {hit_tpex} 檔")
-
     missing = [c for c in codes if c not in prices]
     print(f"  小計: {len(prices)}/{len(codes)}  缺 {len(missing)} 檔")
-
     if not missing:
         return prices
-
     print(f"\n  [Yahoo HTML] 單檔 fallback ({len(missing)} 檔)")
     for c in missing:
         p, suffix = fetch_price_yahoo_html(c, session, headers)
@@ -435,12 +503,10 @@ def fetch_all_prices(all_stock_codes, session, headers):
             prices[c] = p
             print(f"    {c}{suffix} -> {p}")
         time.sleep(0.3)
-
     final_missing = [c for c in codes if c not in prices]
     print(f"\n  === 最終: {len(prices)}/{len(codes)} ===")
     if final_missing:
         print(f"  ❌ 仍缺: {', '.join(final_missing)}")
-
     return prices
 
 
@@ -470,9 +536,8 @@ def main():
     out_dir = Path("snapshots")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 初始 today_date 用系統時間 (後面會被 MoneyDJ 的 holdings_date 覆蓋)
     today_date = datetime.now().strftime("%Y-%m-%d")
-    print(f"\n=== 台股主動式ETF 追蹤器 v11 (系統時間: {today_date}) ===\n", flush=True)
+    print(f"\n=== 台股主動式ETF 追蹤器 v12 (系統時間: {today_date}) ===\n", flush=True)
 
     prev_date, prev_snapshot = find_prev_snapshot(out_dir, today_date)
     if prev_snapshot:
@@ -494,29 +559,19 @@ def main():
             all_etf_data[code] = data
             for h in data["holdings"]:
                 all_stock_codes.add(h["code"])
-
             skipped_count = len(data.get("skipped_rows", []))
             warn_mark = f"  ⚠️ 跳過 {skipped_count} 列" if skipped_count > 0 else ""
             print(f"OK  {data['name'][:20]:20s}  ({data['holdings_date']})  {len(data['holdings']):3d} 檔{warn_mark}", flush=True)
-
             if skipped_count > 0:
                 for row in data["skipped_rows"]:
                     print(f"      └─ 異常列: '{row['raw_text']}' | 權重={row['weight_raw']} | 股數={row['shares_raw']} | 原因={row['reason']}")
-                all_skipped.append({
-                    "etf": code,
-                    "etf_name": data["name"],
-                    "rows": data["skipped_rows"],
-                })
         except Exception as e:
             print(f"FAIL  {e}", flush=True)
             failed.append(code)
         if i < len(ETFS):
             time.sleep(2)
 
-    # ========================================================
-    # 失敗 ETF 單獨重試 (最多 2 輪, 每輪間隔 15 秒)
-    # 用途: 處理 MoneyDJ 偶發失敗, 例如 00984A 某次抓不到
-    # ========================================================
+    # 失敗重試
     if failed:
         print(f"\n  ⚠️ 主迴圈完成, 有 {len(failed)} 檔失敗: {', '.join(failed)}", flush=True)
         for retry_round in range(1, 3):
@@ -537,12 +592,6 @@ def main():
                     skipped_count = len(data.get("skipped_rows", []))
                     warn_mark = f"  ⚠️ 跳過 {skipped_count} 列" if skipped_count > 0 else ""
                     print(f"OK  {data['name'][:20]:20s}  ({data['holdings_date']})  {len(data['holdings']):3d} 檔{warn_mark}", flush=True)
-                    if skipped_count > 0:
-                        all_skipped.append({
-                            "etf": code,
-                            "etf_name": data["name"],
-                            "rows": data["skipped_rows"],
-                        })
                     newly_succeeded.append(code)
                 except Exception as e:
                     print(f"FAIL  {e}", flush=True)
@@ -557,8 +606,24 @@ def main():
             print(f"\n  ❌ 重試後仍失敗: {', '.join(failed)}", flush=True)
 
     # ========================================================
-    # holdings_date 眾數計算
+    # 🆕 v12: 名稱補回（在 holdings_date 計算之前執行）
     # ========================================================
+    print(f"\n  [名稱補回] 建立 名稱→代號 對照表...", flush=True)
+    name_code_map = build_name_code_map(all_etf_data, prev_snapshot)
+    print(f"  [名稱補回] 對照表共 {len(name_code_map)} 筆", flush=True)
+    recover_skipped_by_name(all_etf_data, name_code_map, all_stock_codes)
+
+    # 補回後重新統計 all_skipped
+    for code, data in all_etf_data.items():
+        skipped_count = len(data.get("skipped_rows", []))
+        if skipped_count > 0:
+            all_skipped.append({
+                "etf": code,
+                "etf_name": data["name"],
+                "rows": data["skipped_rows"],
+            })
+
+    # holdings_date 眾數
     today_holdings_dates = [d["holdings_date"] for d in all_etf_data.values() if d.get("holdings_date")]
     most_common_today_hd = max(set(today_holdings_dates), key=today_holdings_dates.count) if today_holdings_dates else None
 
@@ -573,26 +638,16 @@ def main():
     print(f"\n  本次 holdings_date 眾數: {most_common_today_hd}")
     print(f"  上次 holdings_date 眾數: {most_common_prev_hd}")
 
-    # ========================================================
-    # 防呆 1: holdings_date 全部抓不到 -> 擋下
-    # ========================================================
+    # 防呆 1
     if most_common_today_hd is None:
-        print(f"\n{'='*60}")
-        print(f"🛑 holdings_date 全部抓不到")
-        print(f"{'='*60}")
-        print(f"  所有 ETF 的資料日期都解析失敗, 可能 MoneyDJ 頁面異常")
-        print(f"  -> 為避免寫出無日期的快照, 本次不寫檔")
-        print(f"{'='*60}\n")
+        print(f"\n{'='*60}\n🛑 holdings_date 全部抓不到\n{'='*60}\n  -> 為避免寫出無日期的快照, 本次不寫檔\n{'='*60}\n")
         return
 
-    # ========================================================
-    # 關鍵: 用 holdings_date 當檔名日期, 避免 cron 延遲跨日
-    # ========================================================
+    # 用 holdings_date 當檔名日期
     original_today_date = today_date
     today_date = most_common_today_hd.replace("/", "-")
     if original_today_date != today_date:
         print(f"\n  ℹ️ 系統時間是 {original_today_date}, 但 MoneyDJ 資料日期是 {today_date}")
-        print(f"  ℹ️ 為避免 cron 延遲跨日造成資料錯位, 改用 MoneyDJ 日期作為檔名")
         prev_date, prev_snapshot = find_prev_snapshot(out_dir, today_date)
         if prev_snapshot:
             print(f"  ℹ️ 重新載入前一日快照: {prev_date}")
@@ -604,12 +659,9 @@ def main():
                     prev_holdings_dates.append(hd)
         most_common_prev_hd = max(set(prev_holdings_dates), key=prev_holdings_dates.count) if prev_holdings_dates else None
 
-    # ========================================================
-    # 防呆 2: 未開盤日偵測 (任何一檔 ETF 有新資料就通過)
-    # ========================================================
+    # 防呆 2: 未開盤日
     has_any_update = False
     update_detail = []
-
     if prev_snapshot:
         prev_today = prev_snapshot.get("today", {}) or {}
         for etf_code, today_data in all_etf_data.items():
@@ -623,12 +675,7 @@ def main():
         update_detail.append("(首次執行, 無上次快照)")
 
     if not has_any_update:
-        print(f"\n{'='*60}")
-        print(f"🛑 台股未開盤日偵測 (無任何 ETF 有新資料)")
-        print(f"{'='*60}")
-        print(f"  所有 ETF 的 holdings_date 都跟上次快照相同或更舊")
-        print(f"  -> 本次不寫檔, latest.json 保持不變")
-        print(f"{'='*60}\n")
+        print(f"\n{'='*60}\n🛑 台股未開盤日偵測 (無任何 ETF 有新資料)\n{'='*60}\n  -> 本次不寫檔\n{'='*60}\n")
         return
 
     print(f"\n  有新資料的 ETF ({len(update_detail)} 檔):")
@@ -637,31 +684,20 @@ def main():
     if len(update_detail) > 5:
         print(f"    ...(還有 {len(update_detail)-5} 檔)")
 
-    # ========================================================
     # 防呆 3: ETF 數量異常
-    # ========================================================
     today_etf_count = len(all_etf_data)
     prev_etf_count = len((prev_snapshot or {}).get("today") or {})
-
     if prev_etf_count > 0 and today_etf_count < prev_etf_count:
-        print(f"\n{'='*60}")
-        print(f"🛑 ETF 數量異常偵測")
-        print(f"{'='*60}")
-        print(f"  本次抓到: {today_etf_count} 檔")
-        print(f"  上次快照: {prev_etf_count} 檔")
         today_keys = set(all_etf_data.keys())
         prev_keys = set((prev_snapshot or {}).get("today", {}).keys())
-        missing = prev_keys - today_keys
-        print(f"  失聯 ETF: {', '.join(sorted(missing))}")
-        print(f"  -> 為避免污染 latest.json, 本次不寫檔")
-        print(f"{'='*60}\n")
+        missing_etfs = prev_keys - today_keys
+        print(f"\n{'='*60}\n🛑 ETF 數量異常偵測\n{'='*60}")
+        print(f"  本次抓到: {today_etf_count} 檔, 上次快照: {prev_etf_count} 檔")
+        print(f"  失聯 ETF: {', '.join(sorted(missing_etfs))}")
+        print(f"  -> 為避免污染 latest.json, 本次不寫檔\n{'='*60}\n")
         return
 
-    # ========================================================
-    # 🆕 v11: 出清股票補抓
-    # 把「前日有持股、今日已出清」的股票也加進收盤價抓取清單
-    # 修復: 全面出清的股票在前端「變動金額」會顯示 -, 因為沒抓收盤價
-    # ========================================================
+    # 出清股票補抓
     today_only_count = len(all_stock_codes)
     if prev_snapshot:
         prev_today = prev_snapshot.get("today", {}) or {}
@@ -674,20 +710,14 @@ def main():
         if added_for_clearance:
             print(f"\n  📦 出清股票補抓: 加入前日有持股、今日已全部出清的 {len(added_for_clearance)} 檔")
             print(f"     (今日持股 {today_only_count} 檔 + 補抓 {len(added_for_clearance)} 檔 = 共 {len(all_stock_codes)} 檔需抓收盤價)")
-            sample = sorted(added_for_clearance)[:10]
-            print(f"     範例: {', '.join(sample)}{' ...' if len(added_for_clearance) > 10 else ''}")
 
-    # ========================================================
     # 抓收盤價
-    # ========================================================
     print(f"\n[2/3] 抓取收盤價", flush=True)
     prices = {}
     if all_stock_codes:
         prices = fetch_all_prices(all_stock_codes, session, HEADERS)
 
-    # ========================================================
     # 組合快照並儲存
-    # ========================================================
     print(f"\n[3/3] 組合快照並儲存", flush=True)
     snapshot = {
         "today_date": today_date,
@@ -706,7 +736,6 @@ def main():
 
     out_file = out_dir / f"snapshot-{today_date}.json"
     latest_file = Path("latest.json")
-
     out_file.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     latest_file.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -723,13 +752,13 @@ def main():
 
     if all_skipped:
         print(f"\n{'='*60}")
-        print(f"⚠️  資料完整性警告 ({len(all_skipped)} 檔 ETF 有異常列)")
+        print(f"⚠️  資料完整性警告 ({len(all_skipped)} 檔 ETF 有異常列，名稱補回後仍無法解析)")
         print(f"{'='*60}")
         for item in all_skipped:
             print(f"\n📌 {item['etf']} ({item['etf_name']}):")
             for row in item["rows"]:
                 print(f"   - '{row['raw_text']}' | 權重 {row['weight_raw']}% | 股數 {row['shares_raw']} | {row['reason']}")
-        print(f"\n建議: 到 MoneyDJ 網頁核對這些 ETF 後, 手動補資料或通知我修正爬蟲\n")
+        print(f"\n建議: 到 MoneyDJ 網頁核對這些 ETF 後，手動補資料或通知我修正爬蟲\n")
     else:
         print(f"\n✅ 資料完整性:  無異常列\n")
 
