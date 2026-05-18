@@ -940,6 +940,17 @@ function renderETF() {
   const newTag = !isMulti && isNewEtf ? ' <span class="text-xs bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded ml-1">新增首日</span>' : '';
   const newNote = !isMulti && isNewEtf ? '<div class="text-xs text-amber-400 mt-1">⚠️ 此 ETF 今日首次納入追蹤，持股變動不計入買賣超</div>' : '';
   const multiTag = isMulti ? ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">合計視角</span>' : '';
+
+  // 資料日期落後警示
+  const mostCommonHd = (function() {
+    const hds = Object.values(DATA.today).map(e => e.holdings_date).filter(Boolean);
+    if (!hds.length) return null;
+    return hds.sort((a,b) => hds.filter(v=>v===b).length - hds.filter(v=>v===a).length)[0];
+  })();
+  const staleTag = !isMulti && displayHoldingsDate && mostCommonHd && displayHoldingsDate < mostCommonHd
+    ? ' <span class="text-xs bg-rose-700/40 text-rose-300 px-2 py-0.5 rounded ml-1" title="MoneyDJ 尚未更新，顯示為前次資料">⚠️ 資料待更新</span>' : '';
+  const staleNote = !isMulti && displayHoldingsDate && mostCommonHd && displayHoldingsDate < mostCommonHd
+    ? '<div class="text-xs text-rose-400 mt-1">⚠️ MoneyDJ 尚未更新此 ETF（資料日期 ' + esc(displayHoldingsDate) + '，其他 ETF 已更新至 ' + esc(mostCommonHd) + '），持股沿用前次資料，增減欄僅供參考</div>' : '';
   let modeToggleBtn = etfMultiSelectMode
     ? '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-emerald-600 hover:bg-emerald-500 text-white whitespace-nowrap font-semibold">✅ 完成多選 (' + (selectedEtfMulti ? selectedEtfMulti.length : 0) + ')</button>'
     : '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-sky-700 hover:bg-sky-600 text-white whitespace-nowrap font-semibold">🔗 多選模式</button>';
