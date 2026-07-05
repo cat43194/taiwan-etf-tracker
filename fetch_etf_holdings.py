@@ -623,9 +623,19 @@ def main():
                 "rows": data["skipped_rows"],
             })
 
-    # holdings_date 眾數
+    # 決定快照日期：取「已有 ≥門檻 檔 ETF 更新」的「最新」holdings_date
+    # (原本用眾數；但 MoneyDJ 各檔更新時間不一，當「半數已更新、半數還沒」時，
+    #  舊日期仍可能是多數，眾數會卡在舊日期，使已有新資料卻被標成舊日期。
+    #  改用「達門檻的最新日期」，只要 MoneyDJ 開始發佈新一天就會正確前進。)
+    SUPPORT_THRESHOLD = 2  # 至少 N 檔同日才採信該日期，避免單一 ETF 日期異常誤導
     today_holdings_dates = [d["holdings_date"] for d in all_etf_data.values() if d.get("holdings_date")]
-    most_common_today_hd = max(set(today_holdings_dates), key=today_holdings_dates.count) if today_holdings_dates else None
+    if today_holdings_dates:
+        eligible_dates = [d for d in set(today_holdings_dates)
+                          if today_holdings_dates.count(d) >= SUPPORT_THRESHOLD]
+        # holdings_date 為 YYYY/MM/DD 零補位格式，字串 max 即等於日期 max
+        most_common_today_hd = max(eligible_dates) if eligible_dates else max(today_holdings_dates)
+    else:
+        most_common_today_hd = None
 
     prev_holdings_dates = []
     if prev_snapshot:
@@ -635,7 +645,7 @@ def main():
                 prev_holdings_dates.append(hd)
     most_common_prev_hd = max(set(prev_holdings_dates), key=prev_holdings_dates.count) if prev_holdings_dates else None
 
-    print(f"\n  本次 holdings_date 眾數: {most_common_today_hd}")
+    print(f"\n  本次採用 holdings_date: {most_common_today_hd}  (取最新且達 {SUPPORT_THRESHOLD} 檔門檻)")
     print(f"  上次 holdings_date 眾數: {most_common_prev_hd}")
 
     # 防呆 1
