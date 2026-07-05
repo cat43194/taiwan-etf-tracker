@@ -14,6 +14,7 @@
   .sort-th { cursor: pointer; user-select: none; transition: color 0.15s; white-space: nowrap; }
   .sort-th:hover { color: #fbbf24; }
   .stock-cell { min-width: 120px; }
+  .etf-btn-stale { opacity: .55; }
   .etf-btn-checked { position: relative; }
   .etf-btn-checked::before {
     content: '✓';
@@ -90,6 +91,7 @@
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
   </div>
   <div id="new-etf-banner" class="hidden max-w-7xl mx-auto px-3 sm:px-4 py-2 bg-amber-950/40 border-t border-amber-600/30 text-xs text-amber-300"></div>
+  <div id="update-status" class="hidden"></div>
 </header>
 
 <main id="main" class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-5">
@@ -177,6 +179,26 @@ let stockQueryDate = null, stockQueryLoading = false;
 let stockQueryEtfFilter = null;        // null=全部, string=單檔, array=多選
 let stockQueryMultiSelectMode = false; // 是否在多選模式中
 let stockQueryCustomSelected = [];     // 多選模式中暫存的選擇
+
+// ── 資料更新狀態判斷（與 Python 端一致：取「達 2 檔門檻的最新 holdings_date」）──
+function latestHoldingsDate() {
+  if (!DATA || !DATA.today) return null;
+  const hds = Object.values(DATA.today).map(e => e.holdings_date).filter(Boolean);
+  if (!hds.length) return null;
+  const THRESH = 2;
+  const counts = {};
+  hds.forEach(d => { counts[d] = (counts[d] || 0) + 1; });
+  const eligible = Object.keys(counts).filter(d => counts[d] >= THRESH);
+  return (eligible.length ? eligible : hds).sort().pop(); // YYYY/MM/DD 零補位，字串排序即日期排序
+}
+function staleEtfCodes() {
+  const latest = latestHoldingsDate();
+  if (!latest || !DATA || !DATA.today) return [];
+  return Object.keys(DATA.today).filter(k => {
+    const hd = DATA.today[k].holdings_date;
+    return hd && hd < latest;
+  });
+}
 let stockQueryCustomMode = false;      // 舊版相容，不再使用
 
 let historyModalEtf = null, historyModalStock = null, historyModalLoading = false;
@@ -704,6 +726,22 @@ function render() {
   const prevMvRank = buildPrevRankMap(prevAgg, 'market_value');
   document.getElementById('header-sub').textContent = Object.keys(DATA.today).length + ' 檔 ETF · ' + Object.keys(todayAgg).length + ' 檔個股';
   document.getElementById('update-info').innerHTML = '📅 ' + DATA.today_date + ' <span class="text-slate-500">vs</span> ' + (DATA.prev_date || '—');
+  // 更新狀態列：顯示幾檔已更新至最新持股日、幾檔待更新
+  const statusEl = document.getElementById('update-status');
+  if (statusEl) {
+    const latestHd = latestHoldingsDate();
+    const staleCodes = staleEtfCodes();
+    const totalEtfs = Object.keys(DATA.today).length;
+    if (!latestHd) {
+      statusEl.className = 'hidden';
+    } else if (staleCodes.length === 0) {
+      statusEl.className = 'max-w-7xl mx-auto px-3 sm:px-4 py-1.5 bg-emerald-950/20 border-t border-emerald-800/30 text-xs text-emerald-300';
+      statusEl.innerHTML = '📊 全部 ' + totalEtfs + ' 檔已更新至 ' + esc(latestHd) + ' ✓';
+    } else {
+      statusEl.className = 'max-w-7xl mx-auto px-3 sm:px-4 py-1.5 bg-rose-950/30 border-t border-rose-800/40 text-xs text-rose-300';
+      statusEl.innerHTML = '📊 ' + totalEtfs + ' 檔中 <span class="font-semibold">' + (totalEtfs - staleCodes.length) + ' 檔</span>已更新至 ' + esc(latestHd) + '，<span class="font-semibold">' + staleCodes.length + ' 檔</span>待更新（' + staleCodes.map(esc).join('、') + '）';
+    }
+  }
   if (NEW_ETFS.length > 0 && banner) {
     const names = NEW_ETFS.map(k => '<span class="font-semibold">' + esc((DATA.today[k] && DATA.today[k].name) || (ETF_META[k] && ETF_META[k].name) || k) + '</span> (' + esc(k) + ')').join('、');
     banner.innerHTML = '⚠️ 今日新增 ' + NEW_ETFS.length + ' 檔 ETF：' + names + '，首日持股<u>不計入買賣超</u>，明日起正常比對';
@@ -944,12 +982,8 @@ function renderETF() {
   const newNote = !isMulti && isNewEtf ? '<div class="text-xs text-amber-400 mt-1">⚠️ 此 ETF 今日首次納入追蹤，持股變動不計入買賣超</div>' : '';
   const multiTag = isMulti ? ' <span class="text-xs bg-sky-600/30 text-sky-300 px-2 py-0.5 rounded ml-1">合計視角</span>' : '';
 
-  // 資料日期落後警示
-  const mostCommonHd = (function() {
-    const hds = Object.values(DATA.today).map(e => e.holdings_date).filter(Boolean);
-    if (!hds.length) return null;
-    return hds.sort((a,b) => hds.filter(v=>v===b).length - hds.filter(v=>v===a).length)[0];
-  })();
+  // 資料日期落後警示（基準改用「達門檻的最新日期」，與 Python 端一致；原眾數在半數更新空窗期會失效）
+  const mostCommonHd = latestHoldingsDate();
   const staleTag = !isMulti && displayHoldingsDate && mostCommonHd && displayHoldingsDate < mostCommonHd
     ? ' <span class="text-xs bg-rose-700/40 text-rose-300 px-2 py-0.5 rounded ml-1" title="MoneyDJ 尚未更新，顯示為前次資料">⚠️ 資料待更新</span>' : '';
   const staleNote = !isMulti && displayHoldingsDate && mostCommonHd && displayHoldingsDate < mostCommonHd
@@ -958,12 +992,18 @@ function renderETF() {
     ? '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-emerald-600 hover:bg-emerald-500 text-white whitespace-nowrap font-semibold">✅ 完成多選 (' + (selectedEtfMulti ? selectedEtfMulti.length : 0) + ')</button>'
     : '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-sky-700 hover:bg-sky-600 text-white whitespace-nowrap font-semibold">🔗 多選模式</button>';
   let etfBtnsHtml = modeToggleBtn;
+  const latestHdForBtns = latestHoldingsDate();
   etfKeys.forEach(k => {
     const isNew = NEW_ETFS.indexOf(k) !== -1;
+    const kHd = DATA.today[k] && DATA.today[k].holdings_date;
+    const isStale = !isNew && kHd && latestHdForBtns && kHd < latestHdForBtns;
     let isActive = etfMultiSelectMode ? (selectedEtfMulti && selectedEtfMulti.indexOf(k) !== -1) : (isMulti ? selectedEtfMulti.indexOf(k) !== -1 : k === selectedEtf);
     let base = etfMultiSelectMode ? (isActive ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') : (isActive ? (isMulti ? 'bg-sky-600 text-white' : 'bg-amber-600 text-white') : 'bg-slate-800 text-slate-300 hover:bg-slate-700');
     const checkedClass = (etfMultiSelectMode && isActive) || (!etfMultiSelectMode && isActive && isMulti) ? ' etf-btn-checked' : '';
-    etfBtnsHtml += '<button data-etf="' + esc(k) + '" class="etf-btn px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ' + base + checkedClass + ' whitespace-nowrap">' + esc(k) + (isNew ? ' <span class="text-[10px] bg-amber-400/30 px-1 rounded">新</span>' : '') + '</button>';
+    const staleClass = isStale && !isActive ? ' etf-btn-stale' : '';
+    const staleTitle = isStale ? ' title="資料仍為 ' + esc(kHd) + '（其他已更新至 ' + esc(latestHdForBtns) + '）"' : '';
+    const staleDot = isStale ? ' <span class="text-rose-400 text-[9px] align-middle">●</span>' : '';
+    etfBtnsHtml += '<button data-etf="' + esc(k) + '"' + staleTitle + ' class="etf-btn px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded ' + base + checkedClass + staleClass + ' whitespace-nowrap">' + esc(k) + (isNew ? ' <span class="text-[10px] bg-amber-400/30 px-1 rounded">新</span>' : '') + staleDot + '</button>';
   });
   let multiHintHtml = etfMultiSelectMode
     ? '<div class="text-xs text-sky-300 mb-3 flex flex-wrap items-center gap-2 bg-sky-950/30 border border-sky-800/50 rounded p-2"><span>🔗 多選模式中 — 點擊 ETF 鈕加入/移除組合 (已選 ' + (selectedEtfMulti ? selectedEtfMulti.length : 0) + ' 檔)</span><button onclick="clearEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white">清空</button><button onclick="selectAllEtfMulti()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white">全選</button><span class="text-slate-500 ml-auto">完成後按「✅ 完成多選」</span></div>'
