@@ -513,6 +513,135 @@ def fetch_all_prices(all_stock_codes, session, headers):
 # =============================================================
 # 前一日快照
 # =============================================================
+# =============================================================
+# 除權息日曆 (證交所 + 櫃買 openapi)
+#  - 目的: 除權(配股)會讓 ETF 張數無交易而跳增, 前端需據此校正買賣超
+#  - 防禦式解析: 官方欄位名可能調整, 以候選鍵嘗試; 全部失敗只警告不中斷
+#  - 事件延續: 與前日快照的 ex_events 合併(除權後入帳可能延遲數十天),
+#    保留 [今日-60天, 今日+40天] 窗口內事件
+# =============================================================
+
+def _roc_to_iso(s):
+    """民國/西元日期字串 -> ISO (YYYY-MM-DD); 解析失敗回 None"""
+    if not s:
+        return None
+    s = str(s).strip().replace("/", "").replace("-", "").replace(".", "")
+    if not s.isdigit():
+        return None
+    if len(s) == 7:      # 民國 1150707
+        y, m, d = int(s[:3]) + 1911, s[3:5], s[5:7]
+    elif len(s) == 8:    # 西元 20260707
+        y, m, d = int(s[:4]), s[4:6], s[6:8]
+    else:
+        return None
+    try:
+        return datetime(int(y), int(m), int(d)).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _pick(d, keys):
+    """從 dict 依候選鍵序取第一個非空值"""
+    for k in keys:
+        if k in d and str(d[k]).strip() not in ("", "-", "None"):
+            return str(d[k]).strip()
+    return None
+
+
+def _to_float(s):
+    try:
+        return float(str(s).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_ex_rows(rows, source):
+    """把 TWSE/TPEx 除權息表的原始列 -> 標準事件 dict"""
+    events = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        code = _pick(row, ["股票代號", "證券代號", "Code", "SecuritiesCompanyCode", "股票代碼"])
+        if not code or not re.fullmatch(r"\d{4,6}[A-Z]?", code):
+            continue
+        name = _pick(row, ["股票名稱", "證券名稱", "名稱", "Name", "CompanyName"]) or ""
+        date_iso = _roc_to_iso(_pick(row, ["除權息日期", "資料日期", "除權除息日期", "Date", "ExRightDate"]))
+        if not date_iso:
+            continue
+        # 權/息別: 含「權」代表有配股
+        ex_type = _pick(row, ["權/息", "權息別", "除權息別", "權息", "DividendType"]) or ""
+        # 配股率: 優先取明確欄位; 否則由 權值/參考價 推導 (P' = P/(1+r) -> r = 權值/P')
+        ratio = _to_float(_pick(row, ["無償配股率", "配股率", "StockRatio"]))
+        if ratio is not None and ratio > 1:   # 有些來源以「每千股配N股」或百分比表示
+            ratio = ratio / 100.0 if ratio <= 100 else ratio / 1000.0
+        if ratio is None and "權" in ex_type:
+            rights_val = _to_float(_pick(row, ["權值", "權值(元)", "RightValue"]))
+            ref_price = _to_float(_pick(row, ["除權息參考價", "參考價", "開盤競價基準", "ReferencePrice"]))
+            if rights_val and ref_price and ref_price > 0:
+                ratio = round(rights_val / ref_price, 4)
+        events.append({
+            "code": code,
+            "name": name,
+            "date": date_iso,
+            "type": ex_type or ("除權息" if ratio else "除息"),
+            "stock_ratio": round(ratio, 4) if ratio else 0.0,
+            "source": source,
+        })
+    return events
+
+
+def fetch_ex_events(session, headers, today_iso, relevant_codes, prev_events):
+    """抓上市+上櫃除權息公告, 與前日事件合併, 回傳窗口內且與持股相關的事件"""
+    print(f"\n[除權息日曆] 抓取官方公告...", flush=True)
+    fetched = []
+    endpoints = [
+        ("TWSE", "https://openapi.twse.com.tw/v1/exchangeReport/TWT48U"),
+        ("TPEx", "https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost"),
+        ("TPEx", "https://www.tpex.org.tw/openapi/v1/tpex_exright"),
+    ]
+    got_source = set()
+    for source, url in endpoints:
+        if source in got_source:
+            continue
+        try:
+            r = session.get(url, headers=headers, timeout=20)
+            if r.status_code != 200:
+                print(f"  [{source}] HTTP {r.status_code} ({url.split('/')[-1]})")
+                continue
+            data = r.json()
+            rows = data if isinstance(data, list) else data.get("data") or data.get("aaData") or []
+            parsed = _parse_ex_rows(rows, source)
+            print(f"  [{source}] 取得 {len(parsed)} 筆除權息事件")
+            fetched.extend(parsed)
+            got_source.add(source)
+        except Exception as e:
+            print(f"  [{source}] 失敗: {type(e).__name__}: {e}")
+
+    # 合併前日快照延續的事件 (以 code+date 去重, 新抓的優先)
+    merged = {}
+    for ev in (prev_events or []):
+        if isinstance(ev, dict) and ev.get("code") and ev.get("date"):
+            merged[(ev["code"], ev["date"])] = ev
+    for ev in fetched:
+        merged[(ev["code"], ev["date"])] = ev
+
+    # 窗口過濾 [今日-60, 今日+40] + 只留與持股相關的代號
+    try:
+        today_dt = datetime.strptime(today_iso, "%Y-%m-%d")
+    except ValueError:
+        today_dt = datetime.now()
+    lo = (today_dt - timedelta(days=60)).strftime("%Y-%m-%d")
+    hi = (today_dt + timedelta(days=40)).strftime("%Y-%m-%d")
+    result = [ev for ev in merged.values()
+              if lo <= ev["date"] <= hi and (not relevant_codes or ev["code"] in relevant_codes)]
+    result.sort(key=lambda e: (e["date"], e["code"]))
+    n_rights = sum(1 for e in result if e.get("stock_ratio"))
+    print(f"  合併後窗口內相關事件: {len(result)} 筆 (含配股 {n_rights} 筆)")
+    if not got_source:
+        print(f"  ⚠️ 兩個來源皆失敗, 本次沿用前日延續事件 {len(result)} 筆")
+    return result
+
+
 def find_prev_snapshot(out_dir, today_date):
     candidates = []
     for f in out_dir.glob("snapshot-*.json"):
@@ -727,17 +856,34 @@ def main():
     if all_stock_codes:
         prices = fetch_all_prices(all_stock_codes, session, HEADERS)
 
+    # 除權息日曆 (失敗不影響主流程)
+    ex_events = []
+    try:
+        prev_ex = (prev_snapshot or {}).get("ex_events", [])
+        ex_events = fetch_ex_events(session, HEADERS, today_date, all_stock_codes, prev_ex)
+    except Exception as e:
+        print(f"  [除權息日曆] 意外錯誤(不影響主流程): {type(e).__name__}: {e}")
+
     # 組合快照並儲存
     print(f"\n[3/3] 組合快照並儲存", flush=True)
     snapshot = {
         "today_date": today_date,
         "prev_date": prev_date,
         "prices": prices,
+        "ex_events": ex_events,
         "today": {
             code: {
                 "name": data["name"],
                 "holdings_date": data["holdings_date"],
                 "holdings": data["holdings"],
+                # 期貨/選擇權等非股票部位: 無代號但權重可解析的列 (例: 00404A 的臺股期貨)
+                # 前端據此標示, 避免權重加總不足 100% 造成疑惑
+                "non_stock_positions": [
+                    {"name": r.get("raw_text", ""), "weight": w}
+                    for r in data.get("skipped_rows", [])
+                    if r.get("reason") == "無代號格式"
+                    and (w := _to_float(r.get("weight_raw"))) is not None
+                ],
             }
             for code, data in all_etf_data.items()
         },
