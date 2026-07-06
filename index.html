@@ -199,6 +199,56 @@ function staleEtfCodes() {
     return hd && hd < latest;
   });
 }
+
+// ── 除權(配股)校正 ─────────────────────────────────────────
+// 配股會讓 ETF 張數無交易而跳增, 造成假買超。
+// 判定: (1)日曆: 除權日起 45 天窗口內 (配股入帳時點可能延遲)
+//       (2)型態確認: 各 ETF 張數跳增比例吻合配股率 ±2% 且 ≥2 檔吻合
+//          (僅 1 檔持有時, 該檔吻合即成立)
+// 校正: 前日張數 × (1+配股率) 作為比較基準, 校正後仍有差額才是真實買賣。
+// 自我終結: 隔日 prev 已含配股後張數, 跳增消失, 不會重複校正。
+let EX_ADJ = {};   // code -> { ratio, date }  今日生效的配股校正
+let EX_DIV = {};   // code -> { date }         近日除息 (純標註)
+function buildExAdjustments() {
+  EX_ADJ = {}; EX_DIV = {};
+  if (!DATA || !DATA.today) return;
+  const events = DATA.ex_events || [];
+  const todayIso = DATA.today_date;
+  if (!events.length || !todayIso) return;
+  events.forEach(function(ev) {
+    if (!ev || !ev.code || !ev.date) return;
+    const dayGap = (new Date(todayIso) - new Date(ev.date)) / 86400000;
+    if (ev.stock_ratio > 0) {
+      if (dayGap < 0 || dayGap > 45) return;
+      const r = ev.stock_ratio;
+      let rows = 0, matches = 0;
+      Object.keys(DATA.today).forEach(function(k) {
+        const th = ((DATA.today[k] || {}).holdings || []).find(h => h.code === ev.code);
+        const ph = (((DATA.prev || {})[k] || {}).holdings || []).find(h => h.code === ev.code);
+        if (!th || !ph || !ph.lots) return;
+        rows++;
+        const jump = th.lots / ph.lots;
+        if (jump > 1 && Math.abs(jump - (1 + r)) <= 0.02 * (1 + r)) matches++;
+      });
+      if (matches >= 2 || (rows === 1 && matches === 1)) EX_ADJ[ev.code] = { ratio: r, date: ev.date };
+    } else if (dayGap >= 0 && dayGap <= 2) {
+      EX_DIV[ev.code] = { date: ev.date };
+    }
+  });
+}
+function exAdjPrev(code, prevLots) {
+  const a = EX_ADJ[code];
+  return (a && prevLots) ? Math.round(prevLots * (1 + a.ratio)) : prevLots;
+}
+function exTagHtml(code) {
+  if (EX_ADJ[code]) return ' <span class="text-[10px] bg-violet-600/30 text-violet-300 px-1 rounded ml-1" title="配股 ' + (EX_ADJ[code].ratio * 100).toFixed(2) + '%（除權日 ' + esc(EX_ADJ[code].date) + '），增減已校正配股虛增">⚙️除權調整</span>';
+  if (EX_DIV[code]) return ' <span class="text-[10px] bg-slate-600/40 text-slate-300 px-1 rounded ml-1" title="除息日 ' + esc(EX_DIV[code].date) + '，張數不受影響，僅供參考">除息</span>';
+  return '';
+}
+function exEventsInRange(startIso, endIso) {
+  if (!DATA || !DATA.ex_events) return [];
+  return DATA.ex_events.filter(ev => ev && ev.stock_ratio > 0 && ev.date > startIso && ev.date <= endIso);
+}
 let stockQueryCustomMode = false;      // 舊版相容，不再使用
 
 let historyModalEtf = null, historyModalStock = null, historyModalLoading = false;
@@ -283,7 +333,7 @@ function generateDailySignals(todayAgg, prevAgg, newEtfs) {
       if (newEtfs.indexOf(e.etf) !== -1) return;
       const prevEtfHoldings = (DATA.prev && DATA.prev[e.etf] && DATA.prev[e.etf].holdings) || [];
       const prevHolding = prevEtfHoldings.find(h => h.code === s.code);
-      const prevLots = prevHolding ? prevHolding.lots : 0;
+      const prevLots = prevHolding ? exAdjPrev(s.code, prevHolding.lots) : 0;  // 除權校正
       const diff = e.lots - prevLots;
       const isFirstDay = !prevHolding && e.lots > 0;
       if (diff > 0) etfsBuying.push({ etf: e.etf, etfName: e.etf_name, diff, lots: e.lots, isFirstDay });
@@ -523,11 +573,13 @@ function computeFlows(todaySnap, prevSnap, prices, newEtfs) {
   const flows = [];
   keys.forEach(function(code) {
     const t = filteredTodayAgg[code], p = prevAgg[code];
-    const today_lots = t ? t.total_lots : 0, prev_lots = p ? p.total_lots : 0, diff = today_lots - prev_lots;
+    const today_lots = t ? t.total_lots : 0, prev_lots = p ? p.total_lots : 0;
+    const adj_prev = exAdjPrev(code, prev_lots);   // 除權(配股)校正基準
+    const diff = today_lots - adj_prev;
     const price = prices[code] != null ? prices[code] : null;
     flows.push({ code, name: (t && t.name) || (p && p.name) || (todayAggFull[code] && todayAggFull[code].name) || code,
-      today_lots, prev_lots, diff, diff_pct: prev_lots > 0 ? (diff / prev_lots) * 100 : (today_lots > 0 ? 999 : 0),
-      price, diff_value: price ? diff * 1000 * price : null,
+      today_lots, prev_lots, diff, diff_pct: adj_prev > 0 ? (diff / adj_prev) * 100 : (today_lots > 0 ? 999 : 0),
+      price, diff_value: price ? diff * 1000 * price : null, ex_adj: !!EX_ADJ[code],
       etf_count: todayAggFull[code] ? todayAggFull[code].etf_count : 0,
       has_new_etf: (todayAggFull[code] ? todayAggFull[code].total_lots : 0) !== today_lots });
   });
@@ -598,10 +650,11 @@ function renderModal() {
   if (!stock) { closeStockModal(); return; }
   const etfs = [...stock.etfs].sort((a, b) => b.lots - a.lots);
   const prev = aggregate(DATA.prev || {}, DATA.prices || {})[modalStock];
-  const prevLots = prev ? prev.total_lots : 0, diff = stock.total_lots - prevLots;
+  const prevLots = prev ? prev.total_lots : 0, adjPrevLots = exAdjPrev(modalStock, prevLots), diff = stock.total_lots - adjPrevLots;
+  const exNote = EX_ADJ[modalStock] ? ' <span class="text-violet-300 text-[10px]">(⚙️ 配股 ' + (EX_ADJ[modalStock].ratio * 100).toFixed(2) + '% 已校正，比較基準 ' + fmt(adjPrevLots) + ' 張)</span>' : (EX_DIV[modalStock] ? ' <span class="text-slate-400 text-[10px]">(除息日 ' + esc(EX_DIV[modalStock].date) + ')</span>' : '');
   const diffSpanColor = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-rose-400' : 'text-slate-500');
   const diffSpanText = diff !== 0 ? (diff > 0 ? '▲ +' : '▼ ') + fmt(Math.abs(diff)) : '— 持平';
-  const headerHtml = '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex items-baseline gap-2 flex-wrap"><span class="font-bold text-lg sm:text-xl">' + esc(stock.name) + '</span><span class="text-xs sm:text-sm text-slate-400">' + esc(stock.code) + '</span></div><div class="text-xs text-slate-400 mt-1 leading-relaxed">合計 <span class="text-slate-200 font-semibold">' + fmt(stock.total_lots) + '</span> 張 · <span class="text-amber-400">' + stock.etf_count + '</span> 檔 ETF 持有 · 收盤 ' + (stock.price ? fmt(stock.price, 2) : 'N/A') + ' · 市值 <span class="text-amber-400">' + fmtM(stock.market_value) + '</span></div><div class="text-xs mt-1"><span class="text-slate-500">前日合計:</span> <span class="num">' + fmt(prevLots) + '</span> 張 <span class="ml-2 font-semibold ' + diffSpanColor + '">' + diffSpanText + ' 張</span></div></div><button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button></div>';
+  const headerHtml = '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex items-baseline gap-2 flex-wrap"><span class="font-bold text-lg sm:text-xl">' + esc(stock.name) + '</span><span class="text-xs sm:text-sm text-slate-400">' + esc(stock.code) + '</span></div><div class="text-xs text-slate-400 mt-1 leading-relaxed">合計 <span class="text-slate-200 font-semibold">' + fmt(stock.total_lots) + '</span> 張 · <span class="text-amber-400">' + stock.etf_count + '</span> 檔 ETF 持有 · 收盤 ' + (stock.price ? fmt(stock.price, 2) : 'N/A') + ' · 市值 <span class="text-amber-400">' + fmtM(stock.market_value) + '</span></div><div class="text-xs mt-1"><span class="text-slate-500">前日合計:</span> <span class="num">' + fmt(prevLots) + '</span> 張 <span class="ml-2 font-semibold ' + diffSpanColor + '">' + diffSpanText + ' 張</span>' + exNote + '</div></div><button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button></div>';
   const tabHtml = '<div class="flex gap-1 px-3 sm:px-4 pt-2 border-b border-slate-700 bg-slate-900/50"><button onclick="setStockModalTab(\'holdings\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'holdings' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📋 今日持有</button><button onclick="setStockModalTab(\'history\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'history' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📈 歷史趨勢</button></div>';
   let bodyHtml = stockModalTab === 'holdings' ? renderModalHoldings(stock, etfs) : renderModalHistory(stock);
   content.innerHTML = headerHtml + tabHtml + bodyHtml + '<div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>';
@@ -717,6 +770,7 @@ function render() {
     if (banner) banner.classList.add('hidden'); return;
   }
   NEW_ETFS = detectNewEtfs(DATA.today, DATA.prev);
+  buildExAdjustments();
   const todayAgg = aggregate(DATA.today, DATA.prices || {}), prevAgg = aggregate(DATA.prev || {}, DATA.prices || {});
   const flows = computeFlows(DATA.today, DATA.prev || {}, DATA.prices || {}, NEW_ETFS);
   const buy = flows.filter(f => f.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, TOP_N_FLOW);
@@ -805,8 +859,8 @@ function renderFlowTable(rows, dir) {
   const newEtfNote = NEW_ETFS.length > 0 ? '<div class="text-xs text-amber-400 mb-2">⚠️ 已排除新增 ETF (' + NEW_ETFS.join(', ') + ') 首日持股</div>' : '';
   let rowsHtml = '', cardsHtml = '';
   sorted.forEach(function(r, i) {
-    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')" ><div class="text-slate-200 stk-name">' + esc(r.name) + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + ' · ' + r.etf_count + '檔' + (r.has_new_etf ? '<span class="text-amber-400">(含新)</span>' : '') + '</div></td><td class="px-2 py-2 text-right num text-slate-400">' + fmt(r.prev_lots) + '</td><td class="px-2 py-2 text-right num">' + fmt(r.today_lots) + '</td><td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td><td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td></tr>';
-    cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="flex items-start justify-between gap-2 mb-2"><div class="min-w-0 flex-1"><div class="flex items-baseline gap-2 flex-wrap"><span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span><span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span><span class="text-xs text-slate-500">' + esc(r.code) + '</span></div><div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有' + (r.has_new_etf ? ' <span class="text-amber-400">(含新)</span>' : '') + '</div></div><div class="text-right flex-shrink-0"><div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</div><div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? (r.diff_value > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</div></div></div><div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800"><div><div class="text-slate-500 mb-0.5">昨日</div><div class="num text-slate-300">' + fmt(r.prev_lots) + ' 張</div></div><div><div class="text-slate-500 mb-0.5">今日</div><div class="num text-slate-100 font-semibold">' + fmt(r.today_lots) + ' 張</div></div></div></div>';
+    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')" ><div class="text-slate-200 stk-name">' + esc(r.name) + exTagHtml(r.code) + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + ' · ' + r.etf_count + '檔' + (r.has_new_etf ? '<span class="text-amber-400">(含新)</span>' : '') + '</div></td><td class="px-2 py-2 text-right num text-slate-400">' + fmt(r.prev_lots) + '</td><td class="px-2 py-2 text-right num">' + fmt(r.today_lots) + '</td><td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td><td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td></tr>';
+    cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="flex items-start justify-between gap-2 mb-2"><div class="min-w-0 flex-1"><div class="flex items-baseline gap-2 flex-wrap"><span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span><span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span>' + exTagHtml(r.code) + '<span class="text-xs text-slate-500">' + esc(r.code) + '</span></div><div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有' + (r.has_new_etf ? ' <span class="text-amber-400">(含新)</span>' : '') + '</div></div><div class="text-right flex-shrink-0"><div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</div><div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? (r.diff_value > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</div></div></div><div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800"><div><div class="text-slate-500 mb-0.5">昨日</div><div class="num text-slate-300">' + fmt(r.prev_lots) + ' 張</div></div><div><div class="text-slate-500 mb-0.5">今日</div><div class="num text-slate-100 font-semibold">' + fmt(r.today_lots) + ' 張</div></div></div></div>';
   });
   return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">' + label + ' TOP ' + TOP_N_FLOW + ' <span class="text-xs text-slate-500 font-normal">(單位：張)</span></h2>' + newEtfNote + '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div><div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th>' + thFlow('股票', 'name', 'left') + thFlow('昨日張', 'prev_lots') + thFlow('今日張', 'today_lots') + thFlow('增減', 'diff') + thFlow('變動金額', 'diff_value') + '</tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div><div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
 }
@@ -922,7 +976,9 @@ function renderMultiPeriodInfo() {
   }
   const startIdx = HISTORY_DATES.indexOf(range.startDate), endIdx = HISTORY_DATES.indexOf(range.endDate);
   const tradingDays = (startIdx >= 0 && endIdx >= 0) ? Math.abs(startIdx - endIdx) + 1 : '?';
-  return '<div class="text-xs text-slate-400">比較區間: <span class="text-slate-200">' + esc(range.startDate) + '</span> <span class="text-slate-600">→</span> <span class="text-slate-200">' + esc(range.endDate) + '</span><span class="text-slate-500 ml-2">(含起迄共 ' + tradingDays + ' 個交易日，共 ' + HISTORY_DATES.length + ' 天歷史可用)</span></div>';
+  const exInRange = exEventsInRange(range.startDate, range.endDate);
+  const exWarn = exInRange.length ? '<div class="text-xs text-violet-300 mt-1">⚙️ 期間內含 ' + exInRange.length + ' 檔配股除權（' + exInRange.map(e => esc(e.code)).join('、') + '），相關個股的增減含配股虛增，僅供參考</div>' : '';
+  return '<div class="text-xs text-slate-400">比較區間: <span class="text-slate-200">' + esc(range.startDate) + '</span> <span class="text-slate-600">→</span> <span class="text-slate-200">' + esc(range.endDate) + '</span><span class="text-slate-500 ml-2">(含起迄共 ' + tradingDays + ' 個交易日，共 ' + HISTORY_DATES.length + ' 天歷史可用)</span></div>' + exWarn;
 }
 
 function renderMultiTable(rows, dir) {
@@ -964,13 +1020,13 @@ function renderETF() {
         if (isThisNew) merged[h.code].has_new_etf = true;
       });
     });
-    rawRows = Object.values(merged).map(r => { const price = (DATA.prices && DATA.prices[r.code]) || null; return { code: r.code, name: r.name, lots: r.lots, weight: r.weight_sum / etfsInScope.length, prev_lots: r.prev_lots, diff: r.lots - r.prev_lots, price, mv: price ? r.lots * 1000 * price : null, etf_count_in_scope: r.etf_count, has_new_etf: r.has_new_etf }; });
+    rawRows = Object.values(merged).map(r => { const price = (DATA.prices && DATA.prices[r.code]) || null; return { code: r.code, name: r.name, lots: r.lots, weight: r.weight_sum / etfsInScope.length, prev_lots: r.prev_lots, diff: r.lots - exAdjPrev(r.code, r.prev_lots), ex_adj: !!EX_ADJ[r.code], price, mv: price ? r.lots * 1000 * price : null, etf_count_in_scope: r.etf_count, has_new_etf: r.has_new_etf }; });
     totalMV = rawRows.reduce((s, r) => s + (r.mv || 0), 0);
   } else {
     const today = DATA.today[selectedEtf], prev = DATA.prev && DATA.prev[selectedEtf];
     const prevMap = {}; ((prev && prev.holdings) || []).forEach(h => { prevMap[h.code] = h.lots; });
     isNewEtf = NEW_ETFS.indexOf(selectedEtf) !== -1;
-    rawRows = ((today && today.holdings) || []).map(h => { const price = (DATA.prices && DATA.prices[h.code]) || null; return { code: h.code, name: h.name, lots: h.lots, weight: h.weight, prev_lots: prevMap[h.code] || 0, diff: isNewEtf ? 0 : h.lots - (prevMap[h.code] || 0), price, mv: price ? h.lots * 1000 * price : null }; });
+    rawRows = ((today && today.holdings) || []).map(h => { const price = (DATA.prices && DATA.prices[h.code]) || null; return { code: h.code, name: h.name, lots: h.lots, weight: h.weight, prev_lots: prevMap[h.code] || 0, diff: isNewEtf ? 0 : h.lots - exAdjPrev(h.code, prevMap[h.code] || 0), ex_adj: !!EX_ADJ[h.code], price, mv: price ? h.lots * 1000 * price : null }; });
     totalMV = rawRows.reduce((s, r) => s + (r.mv || 0), 0);
     displayName = today.name; displayCode = selectedEtf; displayHoldingsDate = today.holdings_date; etfsInScope = [selectedEtf];
   }
@@ -988,6 +1044,10 @@ function renderETF() {
     ? ' <span class="text-xs bg-rose-700/40 text-rose-300 px-2 py-0.5 rounded ml-1" title="MoneyDJ 尚未更新，顯示為前次資料">⚠️ 資料待更新</span>' : '';
   const staleNote = !isMulti && displayHoldingsDate && mostCommonHd && displayHoldingsDate < mostCommonHd
     ? '<div class="text-xs text-rose-400 mt-1">⚠️ MoneyDJ 尚未更新此 ETF（資料日期 ' + esc(displayHoldingsDate) + '，其他 ETF 已更新至 ' + esc(mostCommonHd) + '），持股沿用前次資料，增減欄僅供參考</div>' : '';
+  // 非股票部位 (期貨/選擇權等, 無代號被排除於持股表之外) 註記, 說明權重加總為何不足 100%
+  const nonStock = (!isMulti && DATA.today[selectedEtf] && DATA.today[selectedEtf].non_stock_positions) || [];
+  const nonStockNote = nonStock.length
+    ? '<div class="text-xs text-violet-300 mt-1">📐 另有非股票部位（期貨/選擇權等）合計 ' + nonStock.reduce((s, p) => s + (p.weight || 0), 0).toFixed(2) + '%：' + nonStock.map(p => esc(p.name) + ' ' + (p.weight > 0 ? '+' : '') + p.weight + '%').join('、') + '，不列入持股表與買賣超</div>' : '';
   let modeToggleBtn = etfMultiSelectMode
     ? '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-emerald-600 hover:bg-emerald-500 text-white whitespace-nowrap font-semibold">✅ 完成多選 (' + (selectedEtfMulti ? selectedEtfMulti.length : 0) + ')</button>'
     : '<button onclick="toggleEtfMultiMode()" class="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded bg-sky-700 hover:bg-sky-600 text-white whitespace-nowrap font-semibold">🔗 多選模式</button>';
@@ -1015,7 +1075,7 @@ function renderETF() {
     const diffColor = (!isMulti && isNewEtf) ? 'text-amber-400' : (r.diff > 0 ? 'text-emerald-400' : (r.diff < 0 ? 'text-rose-400' : 'text-slate-500'));
     const diffText = (!isMulti && isNewEtf) ? '首日' : (r.diff !== 0 ? (r.diff > 0 ? '+' : '') + fmt(r.diff) : '—');
     const weightCell = isMulti ? r.etf_count_in_scope + '/' + etfsInScope.length + '檔' : r.weight.toFixed(2) + '%';
-    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-1.5 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-1.5 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="text-slate-200 stk-name">' + esc(r.name) + (isMulti && r.has_new_etf ? '<span class="text-amber-400 text-xs ml-1">(含新)</span>' : '') + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + '</div></td><td class="px-2 py-1.5 text-right num">' + weightCell + '</td><td class="px-2 py-1.5 text-right num text-slate-400">' + (!isMulti && isNewEtf ? '—' : fmt(r.prev_lots)) + '</td><td class="px-2 py-1.5 text-right num">' + fmt(r.lots) + '</td><td class="px-2 py-1.5 text-right num ' + diffColor + '">' + diffText + '</td><td class="px-2 py-1.5 text-right num text-slate-400">' + (r.price ? fmt(r.price, 2) : '-') + '</td><td class="px-2 py-1.5 text-right num text-amber-400 whitespace-nowrap">' + fmtM(r.mv) + '</td>';
+    rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-1.5 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-1.5 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="text-slate-200 stk-name">' + esc(r.name) + exTagHtml(r.code) + (isMulti && r.has_new_etf ? '<span class="text-amber-400 text-xs ml-1">(含新)</span>' : '') + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + '</div></td><td class="px-2 py-1.5 text-right num">' + weightCell + '</td><td class="px-2 py-1.5 text-right num text-slate-400">' + (!isMulti && isNewEtf ? '—' : fmt(r.prev_lots)) + '</td><td class="px-2 py-1.5 text-right num">' + fmt(r.lots) + '</td><td class="px-2 py-1.5 text-right num ' + diffColor + '">' + diffText + '</td><td class="px-2 py-1.5 text-right num text-slate-400">' + (r.price ? fmt(r.price, 2) : '-') + '</td><td class="px-2 py-1.5 text-right num text-amber-400 whitespace-nowrap">' + fmtM(r.mv) + '</td>';
     if (!isMulti) rowsHtml += '<td class="px-2 py-1.5 text-center"><button onclick="openHistoryModal(\'' + esc(selectedEtf) + '\',\'' + esc(r.code) + '\')" title="查看 ' + esc(r.name) + ' 在此 ETF 的歷史持股" class="bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-xs transition cursor-pointer whitespace-nowrap">📈 歷史</button></td>';
     else rowsHtml += '<td class="px-2 py-1.5 text-center text-slate-600 text-xs">—</td>';
     rowsHtml += '</tr>';
@@ -1024,7 +1084,7 @@ function renderETF() {
     ? '<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center"><div class="text-sky-300 mb-2">🔗 多選模式 — 請點選要合計的 ETF</div><div class="text-xs text-slate-500">至少選 1 檔，完成後按上方「✅ 完成多選」</div></div>'
     : (etfMultiSelectMode && selectedEtfMulti && selectedEtfMulti.length === 1
       ? '<div class="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center"><div class="text-sky-300 mb-2">🔗 已選 1 檔 (' + selectedEtfMulti[0] + ')</div><div class="text-xs text-slate-500">至少再選 1 檔才能看合計，或按「✅ 完成多選」直接看單檔</div></div>'
-      : '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4"><div class="flex items-start justify-between flex-wrap gap-2 mb-3"><div class="min-w-0"><div class="font-semibold text-sm sm:text-base">' + esc(displayName) + (isMulti ? '' : ' (' + esc(displayCode) + ')') + newTag + multiTag + '</div><div class="text-xs text-slate-400 mt-0.5">' + (isMulti ? '自選 ' + etfsInScope.length + ' 檔合計 · ' + rows.length + ' 檔個股 · 合計市值 ' + fmtM(totalMV) : '資料日期 ' + esc(displayHoldingsDate || '-') + ' · ' + rows.length + ' 檔 · 合計市值 ' + fmtM(totalMV)) + '</div>' + newNote + '</div></div><div class="text-xs text-slate-500 mb-2">💡 點擊欄位標題排序</div><div class="overflow-x-auto -mx-3 sm:mx-0"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th>' + thEtf('股票', 'name', 'left') + thEtf(isMulti ? '持有檔數' : '比例', 'weight') + thEtf('前日', 'prev_lots') + thEtf('今日', 'lots') + thEtf('增減', 'diff') + thEtf('收盤', 'price') + thEtf('市值', 'mv') + '<th class="px-2 py-2 text-center">歷史</th></tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div></div>');
+      : '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4"><div class="flex items-start justify-between flex-wrap gap-2 mb-3"><div class="min-w-0"><div class="font-semibold text-sm sm:text-base">' + esc(displayName) + (isMulti ? '' : ' (' + esc(displayCode) + ')') + newTag + multiTag + staleTag + '</div><div class="text-xs text-slate-400 mt-0.5">' + (isMulti ? '自選 ' + etfsInScope.length + ' 檔合計 · ' + rows.length + ' 檔個股 · 合計市值 ' + fmtM(totalMV) : '資料日期 ' + esc(displayHoldingsDate || '-') + ' · ' + rows.length + ' 檔 · 合計市值 ' + fmtM(totalMV)) + '</div>' + newNote + staleNote + nonStockNote + '</div></div><div class="text-xs text-slate-500 mb-2">💡 點擊欄位標題排序</div><div class="overflow-x-auto -mx-3 sm:mx-0"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th>' + thEtf('股票', 'name', 'left') + thEtf(isMulti ? '持有檔數' : '比例', 'weight') + thEtf('前日', 'prev_lots') + thEtf('今日', 'lots') + thEtf('增減', 'diff') + thEtf('收盤', 'price') + thEtf('市值', 'mv') + '<th class="px-2 py-2 text-center">歷史</th></tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div></div>');
   return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">ETF 明細</h2><div class="grid grid-cols-4 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 mb-3">' + etfBtnsHtml + '</div>' + multiHintHtml + bodyHtml;
 }
 function bindEtf() {
