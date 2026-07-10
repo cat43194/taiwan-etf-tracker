@@ -86,7 +86,6 @@
     <button data-tab="buy" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">買超 TOP 20</button>
     <button data-tab="sell" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">賣超 TOP 20</button>
     <button data-tab="multi" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">區間查詢</button>
-    <button data-tab="trend" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">📈 趨勢</button>
     <button data-tab="mv" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">市值 TOP 50</button>
     <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
@@ -307,6 +306,8 @@ function activeDiffFor(etfCode, code, prevLots, todayLots) {
   return todayLots - Math.round(exAdjPrev(code, prevLots) * etfFlowS(etfCode));
 }
 function setFlowAumFilter(v) { flowAumFilter = v; render(); }
+let multiAumFilter = 0;  // 區間查詢規模門檻 (億); 0 = 全部
+function setMultiAumFilter(v) { multiAumFilter = v; render(); }
 
 // ── 趨勢分頁: 現金水位時間序列 + 連買/連賣天數 ──────────────
 // 資料: 複用 HISTORY_CACHE (discoverHistoryDates 已載入全部歷史快照)
@@ -1166,10 +1167,21 @@ function renderMulti() {
   const startSnap = HISTORY_CACHE[range.startDate], endSnap = HISTORY_CACHE[range.endDate];
   if (!startSnap || !endSnap) return headerControls + '<div class="text-center text-rose-400 py-12">⚠️ 無法載入該日期快照</div>';
   const prices = endSnap.prices || {};
-  const flows = computeMultiFlow(startSnap, endSnap, prices);
+  // 規模門檻: 以「目前」估計規模篩選 ETF, 起迄快照都只留達標檔 (規模隨時間變動, 以現況認定成員)
+  let fStart = startSnap, fEnd = endSnap;
+  if (multiAumFilter > 0) {
+    const pass = {};
+    Object.keys((DATA && DATA.today) || {}).forEach(function(k) { const st = AUM_STATS[k]; if (st && st.aum >= multiAumFilter * 1e8) pass[k] = true; });
+    const pick = snap => { const o = { }; Object.keys(snap.today || {}).forEach(k => { if (pass[k]) o[k] = snap.today[k]; }); return { today: o }; };
+    fStart = pick(startSnap); fEnd = pick(endSnap);
+  }
+  const mPassCount = Object.keys((DATA && DATA.today) || {}).filter(k => { const st = AUM_STATS[k]; return multiAumFilter === 0 || (st && st.aum >= multiAumFilter * 1e8); }).length;
+  const mFilterBtn = (v, lab) => '<button onclick="setMultiAumFilter(' + v + ')" class="px-2.5 py-1 text-xs rounded ' + (multiAumFilter === v ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">' + lab + '</button>';
+  const mAumBar = '<div class="flex items-center gap-1.5 mb-3 flex-wrap"><span class="text-xs text-slate-500">規模門檻(估):</span>' + mFilterBtn(0, '全部') + mFilterBtn(100, '≥100億') + mFilterBtn(300, '≥300億') + '<span class="text-xs text-slate-500 ml-1">納入 ' + mPassCount + ' 檔 ETF（以目前規模認定）</span></div>';
+  const flows = computeMultiFlow(fStart, fEnd, prices);
   const buy = flows.filter(f => f.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, MULTI_TOP_N);
   const sell = flows.filter(f => f.diff < 0).sort((a, b) => a.diff - b.diff).slice(0, MULTI_TOP_N);
-  return headerControls
+  return headerControls + mAumBar
     + '<div class="flex gap-2 mb-3"><button onclick="toggleMultiSubTab(\'buy\')" class="px-4 py-1.5 text-sm rounded ' + (multiSubTab === 'buy' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">📈 買超 TOP ' + MULTI_TOP_N + '</button><button onclick="toggleMultiSubTab(\'sell\')" class="px-4 py-1.5 text-sm rounded ' + (multiSubTab === 'sell' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">📉 賣超 TOP ' + MULTI_TOP_N + '</button></div>'
     + renderMultiTable(multiSubTab === 'buy' ? buy : sell, multiSubTab);
 }
