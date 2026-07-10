@@ -86,9 +86,11 @@
     <button data-tab="buy" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">買超 TOP 20</button>
     <button data-tab="sell" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">賣超 TOP 20</button>
     <button data-tab="multi" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">區間查詢</button>
+    <button data-tab="trend" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">📈 趨勢</button>
     <button data-tab="mv" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">市值 TOP 50</button>
     <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
+    <button data-tab="trend" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">📈 趨勢</button>
   </div>
   <div id="new-etf-banner" class="hidden max-w-7xl mx-auto px-3 sm:px-4 py-2 bg-amber-950/40 border-t border-amber-600/30 text-xs text-amber-300"></div>
   <div id="update-status" class="hidden"></div>
@@ -209,31 +211,39 @@ function staleEtfCodes() {
 // 自我終結: 隔日 prev 已含配股後張數, 跳增消失, 不會重複校正。
 let EX_ADJ = {};   // code -> { ratio, date }  今日生效的配股校正
 let EX_DIV = {};   // code -> { date }         近日除息 (純標註)
+function computeExAdjMap(todayEtfs, prevEtfs, events, todayIso) {
+  // 通用版除權校正判定: 供「今日 vs 昨日」與「歷史任兩日」共用
+  const map = {};
+  if (!todayEtfs || !events || !events.length || !todayIso) return map;
+  events.forEach(function(ev) {
+    if (!ev || !ev.code || !ev.date || !(ev.stock_ratio > 0)) return;
+    const dayGap = (new Date(todayIso) - new Date(ev.date)) / 86400000;
+    if (dayGap < 0 || dayGap > 45) return;
+    const r = ev.stock_ratio;
+    let rows = 0, matches = 0;
+    Object.keys(todayEtfs).forEach(function(k) {
+      const th = ((todayEtfs[k] || {}).holdings || []).find(h => h.code === ev.code);
+      const ph = (((prevEtfs || {})[k] || {}).holdings || []).find(h => h.code === ev.code);
+      if (!th || !ph || !ph.lots) return;
+      rows++;
+      const jump = th.lots / ph.lots;
+      if (jump > 1 && Math.abs(jump - (1 + r)) <= 0.02 * (1 + r)) matches++;
+    });
+    if (matches >= 2 || (rows === 1 && matches === 1)) map[ev.code] = { ratio: r, date: ev.date };
+  });
+  return map;
+}
 function buildExAdjustments() {
   EX_ADJ = {}; EX_DIV = {};
   if (!DATA || !DATA.today) return;
   const events = DATA.ex_events || [];
   const todayIso = DATA.today_date;
   if (!events.length || !todayIso) return;
+  EX_ADJ = computeExAdjMap(DATA.today, DATA.prev || {}, events, todayIso);
   events.forEach(function(ev) {
-    if (!ev || !ev.code || !ev.date) return;
+    if (!ev || !ev.code || !ev.date || ev.stock_ratio > 0) return;
     const dayGap = (new Date(todayIso) - new Date(ev.date)) / 86400000;
-    if (ev.stock_ratio > 0) {
-      if (dayGap < 0 || dayGap > 45) return;
-      const r = ev.stock_ratio;
-      let rows = 0, matches = 0;
-      Object.keys(DATA.today).forEach(function(k) {
-        const th = ((DATA.today[k] || {}).holdings || []).find(h => h.code === ev.code);
-        const ph = (((DATA.prev || {})[k] || {}).holdings || []).find(h => h.code === ev.code);
-        if (!th || !ph || !ph.lots) return;
-        rows++;
-        const jump = th.lots / ph.lots;
-        if (jump > 1 && Math.abs(jump - (1 + r)) <= 0.02 * (1 + r)) matches++;
-      });
-      if (matches >= 2 || (rows === 1 && matches === 1)) EX_ADJ[ev.code] = { ratio: r, date: ev.date };
-    } else if (dayGap >= 0 && dayGap <= 2) {
-      EX_DIV[ev.code] = { date: ev.date };
-    }
+    if (dayGap >= 0 && dayGap <= 2) EX_DIV[ev.code] = { date: ev.date };
   });
 }
 function exAdjPrev(code, prevLots) {
@@ -297,6 +307,199 @@ function activeDiffFor(etfCode, code, prevLots, todayLots) {
   return todayLots - Math.round(exAdjPrev(code, prevLots) * etfFlowS(etfCode));
 }
 function setFlowAumFilter(v) { flowAumFilter = v; render(); }
+
+// ── 趨勢分頁: 現金水位時間序列 + 連買/連賣天數 ──────────────
+// 資料: 複用 HISTORY_CACHE (discoverHistoryDates 已載入全部歷史快照)
+// 現金% = 100 − 權重合計(含非股票部位); 全體線以估計AUM加權, 排除上市未滿30天新ETF
+// 連買判定: 逐日「主動買賣」(每日各自套用當日除權校正+吸金因子);
+//   同向→累加; 淨額<門檻視為中斷, 中斷1天不斷鏈、第2天歸零; 反向即斷。
+let TREND_STATS = null, trendLoading = false, trendSelectedEtfs = [];
+const STREAK_MIN_LOTS = 10;       // 單日合計主動淨額低於此張數視為「無動作」
+const TREND_COLORS = ['#f59e0b', '#34d399', '#f472b6', '#a78bfa', '#fb7185', '#22d3ee'];
+
+function trendSleeve(etfObj, prices) {
+  let mv = 0, wsum = 0;
+  ((etfObj && etfObj.holdings) || []).forEach(function(h) {
+    const p = prices[h.code];
+    if (p != null && h.lots) mv += h.lots * 1000 * p;
+    if (h.weight) wsum += h.weight;
+  });
+  ((etfObj && etfObj.non_stock_positions) || []).forEach(function(p) { wsum += (p.weight || 0); });
+  return { mv, wsum: Math.min(wsum, 100) };
+}
+
+function computeTrends() {
+  const datesAsc = [...HISTORY_DATES].sort();
+  const cashSeries = {};
+  const avgSeries = [];
+  const firstSeen = {};
+  datesAsc.forEach(d => {
+    const S = HISTORY_CACHE[d]; if (!S || !S.today) return;
+    Object.keys(S.today).forEach(k => { if (!firstSeen[k]) firstSeen[k] = d; });
+  });
+  const dayMs = 86400000;
+  datesAsc.forEach(function(d) {
+    const S = HISTORY_CACHE[d]; if (!S || !S.today) return;
+    const prices = S.prices || {};
+    let wSum = 0, wCash = 0, n = 0;
+    Object.keys(S.today).forEach(function(k) {
+      const st = trendSleeve(S.today[k], prices);
+      if (!st.mv || st.wsum < 30) return;
+      const cash = Math.max(0, 100 - st.wsum), aum = st.mv / (st.wsum / 100);
+      (cashSeries[k] = cashSeries[k] || []).push({ date: d, pct: cash });
+      const isYoung = firstSeen[k] > datesAsc[0] && (new Date(d) - new Date(firstSeen[k])) / dayMs < 30;
+      if (!isYoung) { wSum += aum; wCash += aum * cash; n++; }
+    });
+    if (wSum > 0) avgSeries.push({ date: d, pct: wCash / wSum, n });
+  });
+  const streakState = {};
+  const recentNets = [];
+  for (let i = 1; i < datesAsc.length; i++) {
+    const dp = datesAsc[i - 1], d = datesAsc[i];
+    const Sp = HISTORY_CACHE[dp], S = HISTORY_CACHE[d];
+    if (!S || !S.today || !Sp || !Sp.today) continue;
+    const prices = S.prices || {};
+    const exMap = computeExAdjMap(S.today, Sp.today, S.ex_events || [], d);
+    const dayNet = {}, nameOf = {};
+    Object.keys(S.today).forEach(function(k) {
+      const cur = S.today[k], prev = Sp.today[k];
+      if (!prev) return;
+      const t = trendSleeve(cur, prices), p0 = trendSleeve(prev, prices);
+      let s = 1;
+      if (t.mv && t.wsum >= 30 && p0.mv && p0.wsum >= 30) {
+        const raw = (t.mv / (t.wsum / 100)) / (p0.mv / (p0.wsum / 100));
+        if (raw >= 0.5 && raw <= 2 && Math.abs(raw - 1) >= 0.003) s = raw;
+      }
+      const prevMap = {};
+      (prev.holdings || []).forEach(h => { prevMap[h.code] = h.lots; });
+      (cur.holdings || []).forEach(function(h) {
+        let base = prevMap[h.code] || 0;
+        if (exMap[h.code]) base = Math.round(base * (1 + exMap[h.code].ratio));
+        dayNet[h.code] = (dayNet[h.code] || 0) + (h.lots - Math.round(base * s));
+        nameOf[h.code] = h.name;
+        delete prevMap[h.code];
+      });
+      Object.keys(prevMap).forEach(function(code) {
+        let base = prevMap[code];
+        if (exMap[code]) base = Math.round(base * (1 + exMap[code].ratio));
+        dayNet[code] = (dayNet[code] || 0) - Math.round(base * s);
+      });
+    });
+    recentNets.push(dayNet);
+    Object.keys(dayNet).forEach(function(code) {
+      const net = dayNet[code];
+      const st = streakState[code] || { dir: 0, len: 0, gap: 0, cum: 0, name: nameOf[code] || code };
+      if (nameOf[code]) st.name = nameOf[code];
+      if (Math.abs(net) < STREAK_MIN_LOTS) {
+        if (st.len > 0) { st.gap++; if (st.gap >= 2) { st.dir = 0; st.len = 0; st.cum = 0; st.gap = 0; } }
+      } else {
+        const dir = net > 0 ? 1 : -1;
+        if (dir === st.dir) { st.len++; st.cum += net; st.gap = 0; }
+        else { st.dir = dir; st.len = 1; st.cum = net; st.gap = 0; }
+      }
+      streakState[code] = st;
+    });
+    Object.keys(streakState).forEach(function(code) {
+      if (dayNet[code] === undefined) {
+        const st = streakState[code];
+        if (st.len > 0) { st.gap++; if (st.gap >= 2) { st.dir = 0; st.len = 0; st.cum = 0; st.gap = 0; } }
+      }
+    });
+  }
+  const last10 = recentNets.slice(-10);
+  const sum10 = {};
+  last10.forEach(dn => Object.keys(dn).forEach(c => { sum10[c] = (sum10[c] || 0) + dn[c]; }));
+  const prices = (DATA && DATA.prices) || {};
+  const rows = Object.keys(streakState).map(function(code) {
+    const st = streakState[code], p = prices[code];
+    return { code, name: st.name, dir: st.dir, len: st.len, cum: st.cum, sum10: sum10[code] || 0,
+      value10: p != null ? (sum10[code] || 0) * 1000 * p : null };
+  });
+  return {
+    datesAsc, cashSeries, avgSeries,
+    buyStreaks: rows.filter(r => r.dir > 0 && r.len >= 3).sort((a, b) => b.len - a.len || b.cum - a.cum).slice(0, 15),
+    sellStreaks: rows.filter(r => r.dir < 0 && r.len >= 3).sort((a, b) => b.len - a.len || a.cum - b.cum).slice(0, 15),
+  };
+}
+
+async function ensureTrendData() {
+  if (TREND_STATS || trendLoading) return;
+  trendLoading = true; render();
+  await discoverHistoryDates();
+  try { TREND_STATS = computeTrends(); } catch (e) { console.error('trend error', e); TREND_STATS = { error: String(e) }; }
+  trendLoading = false; render();
+}
+function toggleTrendEtf(k) {
+  const i = trendSelectedEtfs.indexOf(k);
+  if (i >= 0) trendSelectedEtfs.splice(i, 1);
+  else { if (trendSelectedEtfs.length >= 6) trendSelectedEtfs.shift(); trendSelectedEtfs.push(k); }
+  render();
+}
+
+function buildCashChart(ts) {
+  const avg = ts.avgSeries;
+  if (!avg || avg.length < 2) return '<div class="text-xs text-slate-500">歷史資料不足，無法繪製曲線</div>';
+  const W = 720, H = 240, L = 42, R = 8, T = 12, B = 28;
+  const series = [{ label: '全體加權', color: '#38bdf8', bold: true, pts: avg.map(a => ({ date: a.date, v: a.pct })) }];
+  trendSelectedEtfs.forEach(function(k, i) {
+    const cs = ts.cashSeries[k];
+    if (cs && cs.length >= 2) series.push({ label: k, color: TREND_COLORS[i % TREND_COLORS.length], bold: false, pts: cs.map(a => ({ date: a.date, v: a.pct })) });
+  });
+  const allV = series.flatMap(s => s.pts.map(p => p.v));
+  const mean = avg.reduce((s, a) => s + a.pct, 0) / avg.length;
+  const sd = Math.sqrt(avg.reduce((s, a) => s + (a.pct - mean) * (a.pct - mean), 0) / avg.length);
+  let vMin = Math.min(...allV, mean - sd), vMax = Math.max(...allV, mean + sd);
+  const pad = Math.max((vMax - vMin) * 0.1, 0.3); vMin = Math.max(0, vMin - pad); vMax += pad;
+  const dates = ts.datesAsc;
+  const x = d => L + (dates.indexOf(d) / Math.max(dates.length - 1, 1)) * (W - L - R);
+  const y = v => T + (1 - (v - vMin) / (vMax - vMin)) * (H - T - B);
+  let g = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = vMin + (vMax - vMin) * i / 4, yy = y(v);
+    g += '<line x1="' + L + '" y1="' + yy + '" x2="' + (W - R) + '" y2="' + yy + '" stroke="#1e293b" stroke-width="1"/><text x="' + (L - 5) + '" y="' + (yy + 3) + '" text-anchor="end" font-size="9" fill="#64748b">' + v.toFixed(1) + '%</text>';
+  }
+  [[mean, '#94a3b8', '均值'], [mean + sd, '#f59e0b', '+1σ'], [mean - sd, '#f59e0b', '-1σ']].forEach(function(m) {
+    g += '<line x1="' + L + '" y1="' + y(m[0]) + '" x2="' + (W - R) + '" y2="' + y(m[0]) + '" stroke="' + m[1] + '" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"/><text x="' + (W - R - 2) + '" y="' + (y(m[0]) - 3) + '" text-anchor="end" font-size="8" fill="' + m[1] + '">' + m[2] + '</text>';
+  });
+  const xticks = Math.min(6, dates.length);
+  for (let i = 0; i < xticks; i++) {
+    const di = Math.round(i * (dates.length - 1) / Math.max(xticks - 1, 1));
+    g += '<text x="' + x(dates[di]) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="8" fill="#64748b">' + dates[di].slice(5) + '</text>';
+  }
+  series.forEach(function(s) {
+    const path = s.pts.map((p, i) => (i ? 'L' : 'M') + x(p.date).toFixed(1) + ',' + y(p.v).toFixed(1)).join(' ');
+    g += '<path d="' + path + '" fill="none" stroke="' + s.color + '" stroke-width="' + (s.bold ? 2.2 : 1.4) + '" opacity="' + (s.bold ? 1 : 0.85) + '"/>';
+  });
+  const legend = series.map(s => '<span class="inline-flex items-center gap-1 mr-3"><span style="background:' + s.color + '" class="inline-block w-3 h-0.5 rounded"></span><span class="text-xs text-slate-400">' + esc(s.label) + '</span></span>').join('');
+  const latest = avg[avg.length - 1];
+  const zone = latest.pct > mean + sd ? '<span class="text-amber-300">偏高(保守)</span>' : (latest.pct < mean - sd ? '<span class="text-emerald-300">偏低(積極)</span>' : '<span class="text-slate-300">正常區間</span>');
+  return '<div class="text-xs text-slate-400 mb-1">最新全體加權現金水位 <span class="font-semibold text-sky-300">' + latest.pct.toFixed(2) + '%</span>（期間均值 ' + mean.toFixed(2) + '% ± ' + sd.toFixed(2) + '）· 位置: ' + zone + '</div><svg viewBox="0 0 ' + W + ' ' + H + '" class="w-full" style="max-height:280px">' + g + '</svg><div class="mt-1">' + legend + '</div>';
+}
+
+function renderTrend() {
+  if (trendLoading) return '<div class="max-w-lg mx-auto mt-12 text-center p-6 bg-slate-900 border border-slate-800 rounded-lg"><div class="text-sky-400 font-semibold mb-2">📈 載入歷史資料中…</div><p class="text-xs text-slate-500">首次載入需抓取全部歷史快照（約 10MB），之後切換免等待</p></div>';
+  if (!TREND_STATS) { ensureTrendData(); return '<div class="text-center text-slate-500 text-sm mt-12">準備載入趨勢資料…</div>'; }
+  if (TREND_STATS.error) return '<div class="text-center text-rose-400 text-sm mt-12">趨勢計算失敗: ' + esc(TREND_STATS.error) + '</div>';
+  const ts = TREND_STATS;
+  const etfBtns = Object.keys((DATA && DATA.today) || {}).map(function(k) {
+    const on = trendSelectedEtfs.indexOf(k) !== -1;
+    return '<button onclick="toggleTrendEtf(&quot;' + esc(k) + '&quot;)" class="px-2 py-1 text-xs rounded ' + (on ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">' + esc(k) + '</button>';
+  }).join(' ');
+  const streakTable = function(rows, title, icon, posDir) {
+    if (!rows.length) return '<div class="bg-slate-900 border border-slate-800 rounded-lg p-4"><div class="font-semibold text-sm mb-2">' + icon + ' ' + title + '</div><div class="text-xs text-slate-500">目前沒有連續 3 日以上的' + title + '</div></div>';
+    const trs = rows.map(function(r, i) {
+      const c = posDir ? 'text-emerald-400' : 'text-rose-400';
+      return '<tr class="hover:bg-slate-800/40 cursor-pointer" onclick="openStockModal(&quot;' + esc(r.code) + '&quot;)"><td class="px-2 py-1.5 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-1.5"><div class="text-slate-200">' + esc(r.name) + '</div><div class="text-xs text-slate-500">' + esc(r.code) + '</div></td><td class="px-2 py-1.5 text-right num ' + c + ' font-semibold">' + r.len + ' 日</td><td class="px-2 py-1.5 text-right num ' + c + '">' + (r.sum10 > 0 ? '+' : '') + fmt(r.sum10) + '</td><td class="px-2 py-1.5 text-right num text-slate-400">' + (r.value10 != null ? fmtM(Math.abs(r.value10)) : '-') + '</td></tr>';
+    }).join('');
+    return '<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden"><div class="px-3 py-2 border-b border-slate-800 font-semibold text-sm">' + icon + ' ' + title + ' <span class="text-xs text-slate-500 font-normal">(主動買賣為準 · 中斷1日不斷鏈)</span></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th><th class="px-2 py-2 text-left">股票</th><th class="px-2 py-2 text-right">連續</th><th class="px-2 py-2 text-right">近10日主動張</th><th class="px-2 py-2 text-right">近10日金額</th></tr></thead><tbody class="divide-y divide-slate-800">' + trs + '</tbody></table></div></div>';
+  };
+  return '<h2 class="text-base sm:text-lg font-semibold mb-3">📈 趨勢 <span class="text-xs text-slate-500 font-normal">(' + ts.datesAsc.length + ' 個交易日歷史)</span></h2>'
+    + '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:p-4 mb-4"><div class="font-semibold text-sm mb-2">💰 現金水位（主動經理人風險偏好）</div>'
+    + buildCashChart(ts)
+    + '<div class="mt-2 text-xs text-slate-500">疊加個別 ETF（最多 6 檔）：</div><div class="mt-1 flex flex-wrap gap-1">' + etfBtns + '</div>'
+    + '<div class="mt-2 text-xs text-slate-600">註：全體線以估計規模加權，排除上市未滿 30 日的新 ETF（建倉期現金偏高非看空）；除息季（7~9月）現金會因收到股利自然偏高。</div></div>'
+    + '<div class="grid sm:grid-cols-2 gap-3 sm:gap-4">' + streakTable(ts.buyStreaks, '連續加碼榜', '🔥', true) + streakTable(ts.sellStreaks, '連續減碼榜', '🧊', false) + '</div>';
+}
 let stockQueryCustomMode = false;      // 舊版相容，不再使用
 
 let historyModalEtf = null, historyModalStock = null, historyModalLoading = false;
@@ -867,6 +1070,7 @@ function render() {
   else if (currentTab === 'mv') { const totalMV = Object.values(todayAgg).reduce((s, r) => s + (r.market_value || 0), 0); main.innerHTML = renderMV(mv, totalMV, prevMvRank); }
   else if (currentTab === 'etf') { main.innerHTML = renderETF(); bindEtf(); }
   else if (currentTab === 'stock') { main.innerHTML = renderStock(todayAgg, prevAgg); bindStock(todayAgg, prevAgg); }
+  else if (currentTab === 'trend') { main.innerHTML = renderTrend(); }
 }
 
 function renderOverview(todayAgg, prevAgg, buy, sell, mv, prevMvRank) {
