@@ -309,6 +309,24 @@ function activeDiffFor(etfCode, code, prevLots, todayLots) {
 function setFlowAumFilter(v) { flowAumFilter = v; render(); }
 let multiAumFilter = 0;  // 區間查詢規模門檻 (億); 0 = 全部
 function setMultiAumFilter(v) { multiAumFilter = v; render(); }
+let flowRankMetric = 'diff';  // 買賣超排名依據: 'diff'(張數) | 'diff_value'(金額)
+function setFlowRankMetric(v) { flowRankMetric = v; render(); }
+// 依排名依據排序 flows (dir: 'buy' 取大到小 / 'sell' 取小到大); 金額為 null 者一律墊底
+function rankFlows(list, dir) {
+  const m = flowRankMetric;
+  const val = f => (m === 'diff_value' ? f.diff_value : f.diff);
+  return list.slice().sort(function(a, b) {
+    const va = val(a), vb = val(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return dir === 'buy' ? vb - va : va - vb;
+  });
+}
+function rankMetricBar() {
+  const btn = (v, lab) => '<button onclick="setFlowRankMetric(\'' + v + '\')" class="px-2.5 py-1 text-xs rounded ' + (flowRankMetric === v ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">' + lab + '</button>';
+  return '<div class="flex items-center gap-1.5 mb-3 flex-wrap"><span class="text-xs text-slate-500">排名依據:</span>' + btn('diff', '張數') + btn('diff_value', '金額') + '<span class="text-xs text-slate-500 ml-1">(切金額可顯現高價股)</span></div>';
+}
 
 // ── 趨勢分頁: 現金水位時間序列 + 連買/連賣天數 ──────────────
 // 資料: 複用 HISTORY_CACHE (discoverHistoryDates 已載入全部歷史快照)
@@ -1036,8 +1054,8 @@ function render() {
     });
   }
   const flows = computeFlows(flowToday, flowPrev, DATA.prices || {}, NEW_ETFS);
-  const buy = flows.filter(f => f.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, TOP_N_FLOW);
-  const sell = flows.filter(f => f.diff < 0).sort((a, b) => a.diff - b.diff).slice(0, TOP_N_FLOW);
+  const buy = rankFlows(flows.filter(f => f.diff > 0), 'buy').slice(0, TOP_N_FLOW);
+  const sell = rankFlows(flows.filter(f => f.diff < 0), 'sell').slice(0, TOP_N_FLOW);
   const mv = Object.values(todayAgg).filter(s => s.market_value != null).sort((a, b) => b.market_value - a.market_value).slice(0, TOP_N_MV);
   const mvOverview = Object.values(todayAgg).filter(s => s.market_value != null).sort((a, b) => b.market_value - a.market_value).slice(0, TOP_N_OVERVIEW);
   const prevMvRank = buildPrevRankMap(prevAgg, 'market_value');
@@ -1130,7 +1148,7 @@ function renderFlowTable(rows, dir) {
     rowsHtml += '<tr class="hover:bg-slate-800/30"><td class="px-2 py-2 text-slate-500">' + (i + 1) + '</td><td class="px-2 py-2 stock-cell stock-link" onclick="openStockModal(\'' + esc(r.code) + '\')" ><div class="text-slate-200 stk-name">' + esc(r.name) + exTagHtml(r.code) + '</div><div class="text-xs text-slate-500 stk-meta">' + esc(r.code) + ' · ' + r.etf_count + '檔' + (r.has_new_etf ? '<span class="text-amber-400">(含新)</span>' : '') + '</div></td><td class="px-2 py-2 text-right num text-slate-400">' + fmt(r.prev_lots) + '</td><td class="px-2 py-2 text-right num">' + fmt(r.today_lots) + '</td><td class="px-2 py-2 text-right num font-semibold text-' + color + '-400">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</td><td class="px-2 py-2 text-right num text-xs text-' + color + '-400 whitespace-nowrap">' + (r.diff_value != null ? (r.diff > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</td></tr>';
     cardsHtml += '<div class="bg-slate-900 border border-slate-800 rounded-lg p-3 cursor-pointer active:bg-slate-800/50 transition" onclick="openStockModal(\'' + esc(r.code) + '\')"><div class="flex items-start justify-between gap-2 mb-2"><div class="min-w-0 flex-1"><div class="flex items-baseline gap-2 flex-wrap"><span class="text-xs text-slate-500 font-semibold">#' + (i + 1) + '</span><span class="font-semibold text-base text-slate-100">' + esc(r.name) + '</span>' + exTagHtml(r.code) + '<span class="text-xs text-slate-500">' + esc(r.code) + '</span></div><div class="text-xs text-slate-500 mt-1">' + r.etf_count + ' 檔 ETF 持有' + (r.has_new_etf ? ' <span class="text-amber-400">(含新)</span>' : '') + '</div></div><div class="text-right flex-shrink-0"><div class="text-2xl font-bold text-' + color + '-400 num leading-tight">' + (r.diff > 0 ? '+' : '') + fmt(r.diff) + '</div><div class="text-xs text-' + color + '-400/70 num">' + (r.diff_value != null ? (r.diff_value > 0 ? '+' : '') + fmtM(r.diff_value) : '-') + '</div></div></div><div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800"><div><div class="text-slate-500 mb-0.5">昨日</div><div class="num text-slate-300">' + fmt(r.prev_lots) + ' 張</div></div><div><div class="text-slate-500 mb-0.5">今日</div><div class="num text-slate-100 font-semibold">' + fmt(r.today_lots) + ' 張</div></div></div></div>';
   });
-  return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">' + label + ' TOP ' + TOP_N_FLOW + ' <span class="text-xs text-slate-500 font-normal">(單位：張)</span></h2>' + aumFilterBar + newEtfNote + '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div><div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th>' + thFlow('股票', 'name', 'left') + thFlow('昨日張', 'prev_lots') + thFlow('今日張', 'today_lots') + thFlow('增減', 'diff') + thFlow('變動金額', 'diff_value') + '</tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div><div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
+  return '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">' + label + ' TOP ' + TOP_N_FLOW + ' <span class="text-xs text-slate-500 font-normal">(單位：張)</span></h2>' + aumFilterBar + rankMetricBar() + newEtfNote + '<div class="text-xs text-slate-500 mb-3">💡 點擊查看持有 ETF · 桌機可點欄位標題排序</div><div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-lg overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-800/50 text-slate-400 text-xs"><tr><th class="px-2 py-2 text-left">#</th>' + thFlow('股票', 'name', 'left') + thFlow('昨日張', 'prev_lots') + thFlow('今日張', 'today_lots') + thFlow('增減', 'diff') + thFlow('變動金額', 'diff_value') + '</tr></thead><tbody class="divide-y divide-slate-800">' + rowsHtml + '</tbody></table></div><div class="block sm:hidden space-y-2">' + cardsHtml + '</div>';
 }
 
 function renderMV(rows, total, prevMvRank) {
@@ -1180,9 +1198,9 @@ function renderMulti() {
   const mFilterBtn = (v, lab) => '<button onclick="setMultiAumFilter(' + v + ')" class="px-2.5 py-1 text-xs rounded ' + (multiAumFilter === v ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">' + lab + '</button>';
   const mAumBar = '<div class="flex items-center gap-1.5 mb-3 flex-wrap"><span class="text-xs text-slate-500">規模門檻(估):</span>' + mFilterBtn(0, '全部') + mFilterBtn(100, '≥100億') + mFilterBtn(300, '≥300億') + '<span class="text-xs text-slate-500 ml-1">納入 ' + mPassCount + ' 檔 ETF（以目前規模認定）</span></div>';
   const flows = computeMultiFlow(fStart, fEnd, prices);
-  const buy = flows.filter(f => f.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, MULTI_TOP_N);
-  const sell = flows.filter(f => f.diff < 0).sort((a, b) => a.diff - b.diff).slice(0, MULTI_TOP_N);
-  return headerControls + mAumBar
+  const buy = rankFlows(flows.filter(f => f.diff > 0), 'buy').slice(0, MULTI_TOP_N);
+  const sell = rankFlows(flows.filter(f => f.diff < 0), 'sell').slice(0, MULTI_TOP_N);
+  return headerControls + mAumBar + rankMetricBar()
     + '<div class="flex gap-2 mb-3"><button onclick="toggleMultiSubTab(\'buy\')" class="px-4 py-1.5 text-sm rounded ' + (multiSubTab === 'buy' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">📈 買超 TOP ' + MULTI_TOP_N + '</button><button onclick="toggleMultiSubTab(\'sell\')" class="px-4 py-1.5 text-sm rounded ' + (multiSubTab === 'sell' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">📉 賣超 TOP ' + MULTI_TOP_N + '</button></div>'
     + renderMultiTable(multiSubTab === 'buy' ? buy : sell, multiSubTab);
 }
