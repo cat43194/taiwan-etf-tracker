@@ -874,337 +874,6 @@
         }
       ]
     },
-    "00982A": {
-      "name": "主動群益台灣強棒",
-      "holdings_date": "2026/08/13",
-      "holdings": [
-        {
-          "code": "2330",
-          "name": "台積電",
-          "lots": 1794,
-          "weight": 8.31
-        },
-        {
-          "code": "2454",
-          "name": "聯發科",
-          "lots": 872,
-          "weight": 7.01
-        },
-        {
-          "code": "5536",
-          "name": "聖暉",
-          "lots": 3679,
-          "weight": 6.32
-        },
-        {
-          "code": "6139",
-          "name": "亞翔",
-          "lots": 4025,
-          "weight": 6.17
-        },
-        {
-          "code": "6669",
-          "name": "緯穎",
-          "lots": 510,
-          "weight": 5.89
-        },
-        {
-          "code": "2059",
-          "name": "川湖",
-          "lots": 185,
-          "weight": 4.31
-        },
-        {
-          "code": "6223",
-          "name": "旺矽",
-          "lots": 307,
-          "weight": 3.79
-        },
-        {
-          "code": "2360",
-          "name": "致茂",
-          "lots": 837,
-          "weight": 3.66
-        },
-        {
-          "code": "2383",
-          "name": "台光電",
-          "lots": 327,
-          "weight": 3.54
-        },
-        {
-          "code": "3105",
-          "name": "穩懋",
-          "lots": 4809,
-          "weight": 3.54
-        },
-        {
-          "code": "2345",
-          "name": "智邦",
-          "lots": 817,
-          "weight": 3.53
-        },
-        {
-          "code": "4958",
-          "name": "臻鼎-KY",
-          "lots": 3178,
-          "weight": 2.89
-        },
-        {
-          "code": "3491",
-          "name": "昇達科",
-          "lots": 988,
-          "weight": 2.53
-        },
-        {
-          "code": "3017",
-          "name": "奇鋐",
-          "lots": 407,
-          "weight": 2.48
-        },
-        {
-          "code": "6531",
-          "name": "愛普",
-          "lots": 1440,
-          "weight": 2.37
-        },
-        {
-          "code": "6488",
-          "name": "環球晶",
-          "lots": 1134,
-          "weight": 2.21
-        },
-        {
-          "code": "3008",
-          "name": "大立光",
-          "lots": 248,
-          "weight": 2.2
-        },
-        {
-          "code": "2303",
-          "name": "聯電",
-          "lots": 9109,
-          "weight": 2.16
-        },
-        {
-          "code": "3264",
-          "name": "欣銓",
-          "lots": 4780,
-          "weight": 2.1
-        },
-        {
-          "code": "6257",
-          "name": "矽格",
-          "lots": 4821,
-          "weight": 1.95
-        },
-        {
-          "code": "2377",
-          "name": "微星",
-          "lots": 5678,
-          "weight": 1.82
-        },
-        {
-          "code": "3583",
-          "name": "辛耘",
-          "lots": 1158,
-          "weight": 1.58
-        },
-        {
-          "code": "2467",
-          "name": "志聖",
-          "lots": 1505,
-          "weight": 1.57
-        },
-        {
-          "code": "6274",
-          "name": "台燿",
-          "lots": 450,
-          "weight": 1.37
-        },
-        {
-          "code": "8016",
-          "name": "矽創",
-          "lots": 2270,
-          "weight": 1.36
-        },
-        {
-          "code": "3702",
-          "name": "大聯大",
-          "lots": 5678,
-          "weight": 1.33
-        },
-        {
-          "code": "3711",
-          "name": "日月光投控",
-          "lots": 1016,
-          "weight": 1.21
-        },
-        {
-          "code": "7769",
-          "name": "鴻勁",
-          "lots": 93,
-          "weight": 1.2
-        },
-        {
-          "code": "2316",
-          "name": "楠梓電",
-          "lots": 3471,
-          "weight": 1.08
-        },
-        {
-          "code": "5274",
-          "name": "信驊",
-          "lots": 29,
-          "weight": 1.0
-        },
-        {
-          "code": "3036",
-          "name": "文曄",
-          "lots": 2404,
-          "weight": 0.98
-        },
-        {
-          "code": "8996",
-          "name": "高力",
-          "lots": 382,
-          "weight": 0.93
-        },
-        {
-          "code": "1785",
-          "name": "光洋科",
-          "lots": 4384,
-          "weight": 0.91
-        },
-        {
-          "code": "2327",
-          "name": "國巨",
-          "lots": 696,
-          "weight": 0.88
-        },
-        {
-          "code": "2351",
-          "name": "順德",
-          "lots": 2316,
-          "weight": 0.76
-        },
-        {
-          "code": "2472",
-          "name": "立隆電",
-          "lots": 1533,
-          "weight": 0.74
-        },
-        {
-          "code": "6278",
-          "name": "台表科",
-          "lots": 2310,
-          "weight": 0.74
-        },
-        {
-          "code": "3529",
-          "name": "力旺",
-          "lots": 93,
-          "weight": 0.48
-        },
-        {
-          "code": "6831",
-          "name": "邁科",
-          "lots": 300,
-          "weight": 0.39
-        },
-        {
-          "code": "6239",
-          "name": "力成",
-          "lots": 710,
-          "weight": 0.38
-        },
-        {
-          "code": "2376",
-          "name": "技嘉",
-          "lots": 443,
-          "weight": 0.33
-        },
-        {
-          "code": "2451",
-          "name": "創見",
-          "lots": 521,
-          "weight": 0.3
-        },
-        {
-          "code": "2885",
-          "name": "元大金",
-          "lots": 2128,
-          "weight": 0.28
-        },
-        {
-          "code": "6187",
-          "name": "萬潤",
-          "lots": 91,
-          "weight": 0.22
-        },
-        {
-          "code": "6446",
-          "name": "藥華藥",
-          "lots": 42,
-          "weight": 0.12
-        },
-        {
-          "code": "3231",
-          "name": "緯創",
-          "lots": 91,
-          "weight": 0.03
-        },
-        {
-          "code": "6177",
-          "name": "達麗",
-          "lots": 194,
-          "weight": 0.02
-        },
-        {
-          "code": "3443",
-          "name": "創意",
-          "lots": 1,
-          "weight": 0.01
-        },
-        {
-          "code": "4441",
-          "name": "振大環球",
-          "lots": 4,
-          "weight": 0.0
-        },
-        {
-          "code": "3706",
-          "name": "神達",
-          "lots": 1,
-          "weight": 0.0
-        },
-        {
-          "code": "2886",
-          "name": "兆豐金",
-          "lots": 1,
-          "weight": 0.0
-        },
-        {
-          "code": "2368",
-          "name": "金像電",
-          "lots": 2,
-          "weight": 0.0
-        },
-        {
-          "code": "8046",
-          "name": "南電",
-          "lots": 1,
-          "weight": 0.0
-        },
-        {
-          "code": "8358",
-          "name": "金居",
-          "lots": 1,
-          "weight": 0.0
-        }
-      ],
-      "non_stock_positions": []
-    },
     "00984A": {
       "name": "主動安聯台灣高息",
       "holdings_date": "2026/08/13",
@@ -6152,6 +5821,313 @@
       ],
       "non_stock_positions": []
     },
+    "00407A": {
+      "name": "主動凱基台灣",
+      "holdings_date": "2026/08/13",
+      "holdings": [
+        {
+          "code": "2330",
+          "name": "台積電",
+          "lots": 991,
+          "weight": 8.31
+        },
+        {
+          "code": "2454",
+          "name": "聯發科",
+          "lots": 476,
+          "weight": 6.93
+        },
+        {
+          "code": "2383",
+          "name": "台光電",
+          "lots": 269,
+          "weight": 5.27
+        },
+        {
+          "code": "3017",
+          "name": "奇鋐",
+          "lots": 424,
+          "weight": 4.67
+        },
+        {
+          "code": "3037",
+          "name": "欣興",
+          "lots": 1310,
+          "weight": 4.51
+        },
+        {
+          "code": "6669",
+          "name": "緯穎",
+          "lots": 205,
+          "weight": 4.29
+        },
+        {
+          "code": "2308",
+          "name": "台達電",
+          "lots": 570,
+          "weight": 3.7
+        },
+        {
+          "code": "6274",
+          "name": "台燿",
+          "lots": 643,
+          "weight": 3.54
+        },
+        {
+          "code": "2059",
+          "name": "川湖",
+          "lots": 70,
+          "weight": 2.95
+        },
+        {
+          "code": "2345",
+          "name": "智邦",
+          "lots": 366,
+          "weight": 2.86
+        },
+        {
+          "code": "6223",
+          "name": "旺矽",
+          "lots": 127,
+          "weight": 2.84
+        },
+        {
+          "code": "3443",
+          "name": "創意",
+          "lots": 143,
+          "weight": 2.73
+        },
+        {
+          "code": "6446",
+          "name": "藥華藥",
+          "lots": 537,
+          "weight": 2.67
+        },
+        {
+          "code": "3711",
+          "name": "日月光投控",
+          "lots": 1138,
+          "weight": 2.45
+        },
+        {
+          "code": "2327",
+          "name": "國巨",
+          "lots": 1070,
+          "weight": 2.44
+        },
+        {
+          "code": "8046",
+          "name": "南電",
+          "lots": 560,
+          "weight": 2.34
+        },
+        {
+          "code": "6805",
+          "name": "富世達",
+          "lots": 341,
+          "weight": 2.15
+        },
+        {
+          "code": "2303",
+          "name": "聯電",
+          "lots": 4976,
+          "weight": 2.13
+        },
+        {
+          "code": "2360",
+          "name": "致茂",
+          "lots": 267,
+          "weight": 2.12
+        },
+        {
+          "code": "5274",
+          "name": "信驊",
+          "lots": 34,
+          "weight": 2.1
+        },
+        {
+          "code": "3529",
+          "name": "力旺",
+          "lots": 215,
+          "weight": 2.0
+        },
+        {
+          "code": "3665",
+          "name": "貿聯-KY",
+          "lots": 257,
+          "weight": 1.95
+        },
+        {
+          "code": "2395",
+          "name": "研華",
+          "lots": 811,
+          "weight": 1.95
+        },
+        {
+          "code": "2408",
+          "name": "南亞科",
+          "lots": 1076,
+          "weight": 1.91
+        },
+        {
+          "code": "2368",
+          "name": "金像電",
+          "lots": 538,
+          "weight": 1.87
+        },
+        {
+          "code": "2344",
+          "name": "華邦電",
+          "lots": 2853,
+          "weight": 1.74
+        },
+        {
+          "code": "4958",
+          "name": "臻鼎-KY",
+          "lots": 1028,
+          "weight": 1.69
+        },
+        {
+          "code": "6531",
+          "name": "愛普",
+          "lots": 472,
+          "weight": 1.41
+        },
+        {
+          "code": "6515",
+          "name": "穎崴",
+          "lots": 59,
+          "weight": 1.37
+        },
+        {
+          "code": "8210",
+          "name": "勤誠",
+          "lots": 258,
+          "weight": 0.88
+        },
+        {
+          "code": "5536",
+          "name": "聖暉",
+          "lots": 253,
+          "weight": 0.79
+        },
+        {
+          "code": "2376",
+          "name": "技嘉",
+          "lots": 575,
+          "weight": 0.78
+        },
+        {
+          "code": "2379",
+          "name": "瑞昱",
+          "lots": 282,
+          "weight": 0.74
+        },
+        {
+          "code": "1590",
+          "name": "亞德客-KY",
+          "lots": 134,
+          "weight": 0.68
+        },
+        {
+          "code": "3034",
+          "name": "聯詠",
+          "lots": 361,
+          "weight": 0.67
+        },
+        {
+          "code": "2412",
+          "name": "中華電",
+          "lots": 1277,
+          "weight": 0.6
+        },
+        {
+          "code": "1303",
+          "name": "南亞",
+          "lots": 830,
+          "weight": 0.54
+        },
+        {
+          "code": "3293",
+          "name": "鈊象",
+          "lots": 205,
+          "weight": 0.54
+        },
+        {
+          "code": "8996",
+          "name": "高力",
+          "lots": 106,
+          "weight": 0.47
+        },
+        {
+          "code": "3491",
+          "name": "昇達科",
+          "lots": 92,
+          "weight": 0.43
+        },
+        {
+          "code": "3533",
+          "name": "嘉澤",
+          "lots": 56,
+          "weight": 0.35
+        },
+        {
+          "code": "6415",
+          "name": "矽力*-KY",
+          "lots": 220,
+          "weight": 0.35
+        },
+        {
+          "code": "6526",
+          "name": "達發",
+          "lots": 138,
+          "weight": 0.3
+        },
+        {
+          "code": "4904",
+          "name": "遠傳",
+          "lots": 810,
+          "weight": 0.28
+        },
+        {
+          "code": "5434",
+          "name": "崇越",
+          "lots": 99,
+          "weight": 0.18
+        },
+        {
+          "code": "5289",
+          "name": "宜鼎",
+          "lots": 32,
+          "weight": 0.17
+        },
+        {
+          "code": "2451",
+          "name": "創見",
+          "lots": 161,
+          "weight": 0.17
+        },
+        {
+          "code": "3260",
+          "name": "威剛",
+          "lots": 115,
+          "weight": 0.16
+        },
+        {
+          "code": "8299",
+          "name": "群聯",
+          "lots": 19,
+          "weight": 0.15
+        },
+        {
+          "code": "2458",
+          "name": "義隆",
+          "lots": 175,
+          "weight": 0.09
+        }
+      ],
+      "non_stock_positions": []
+    },
     "00408A": {
       "name": "主動第一金優股息",
       "holdings_date": "2026/08/13",
@@ -6616,309 +6592,333 @@
       ],
       "non_stock_positions": []
     },
-    "00407A": {
-      "name": "主動凱基台灣",
+    "00982A": {
+      "name": "主動群益台灣強棒",
       "holdings_date": "2026/08/13",
       "holdings": [
         {
           "code": "2330",
           "name": "台積電",
-          "lots": 991,
+          "lots": 1794,
           "weight": 8.31
         },
         {
           "code": "2454",
           "name": "聯發科",
-          "lots": 476,
-          "weight": 6.93
-        },
-        {
-          "code": "2383",
-          "name": "台光電",
-          "lots": 269,
-          "weight": 5.27
-        },
-        {
-          "code": "3017",
-          "name": "奇鋐",
-          "lots": 424,
-          "weight": 4.67
-        },
-        {
-          "code": "3037",
-          "name": "欣興",
-          "lots": 1310,
-          "weight": 4.51
-        },
-        {
-          "code": "6669",
-          "name": "緯穎",
-          "lots": 205,
-          "weight": 4.29
-        },
-        {
-          "code": "2308",
-          "name": "台達電",
-          "lots": 570,
-          "weight": 3.7
-        },
-        {
-          "code": "6274",
-          "name": "台燿",
-          "lots": 643,
-          "weight": 3.54
-        },
-        {
-          "code": "2059",
-          "name": "川湖",
-          "lots": 70,
-          "weight": 2.95
-        },
-        {
-          "code": "2345",
-          "name": "智邦",
-          "lots": 366,
-          "weight": 2.86
-        },
-        {
-          "code": "6223",
-          "name": "旺矽",
-          "lots": 127,
-          "weight": 2.84
-        },
-        {
-          "code": "3443",
-          "name": "創意",
-          "lots": 143,
-          "weight": 2.73
-        },
-        {
-          "code": "6446",
-          "name": "藥華藥",
-          "lots": 537,
-          "weight": 2.67
-        },
-        {
-          "code": "3711",
-          "name": "日月光投控",
-          "lots": 1138,
-          "weight": 2.45
-        },
-        {
-          "code": "2327",
-          "name": "國巨",
-          "lots": 1070,
-          "weight": 2.44
-        },
-        {
-          "code": "8046",
-          "name": "南電",
-          "lots": 560,
-          "weight": 2.34
-        },
-        {
-          "code": "6805",
-          "name": "富世達",
-          "lots": 341,
-          "weight": 2.15
-        },
-        {
-          "code": "2303",
-          "name": "聯電",
-          "lots": 4976,
-          "weight": 2.13
-        },
-        {
-          "code": "2360",
-          "name": "致茂",
-          "lots": 267,
-          "weight": 2.12
-        },
-        {
-          "code": "5274",
-          "name": "信驊",
-          "lots": 34,
-          "weight": 2.1
-        },
-        {
-          "code": "3529",
-          "name": "力旺",
-          "lots": 215,
-          "weight": 2.0
-        },
-        {
-          "code": "3665",
-          "name": "貿聯-KY",
-          "lots": 257,
-          "weight": 1.95
-        },
-        {
-          "code": "2395",
-          "name": "研華",
-          "lots": 811,
-          "weight": 1.95
-        },
-        {
-          "code": "2408",
-          "name": "南亞科",
-          "lots": 1076,
-          "weight": 1.91
-        },
-        {
-          "code": "2368",
-          "name": "金像電",
-          "lots": 538,
-          "weight": 1.87
-        },
-        {
-          "code": "2344",
-          "name": "華邦電",
-          "lots": 2853,
-          "weight": 1.74
-        },
-        {
-          "code": "4958",
-          "name": "臻鼎-KY",
-          "lots": 1028,
-          "weight": 1.69
-        },
-        {
-          "code": "6531",
-          "name": "愛普",
-          "lots": 472,
-          "weight": 1.41
-        },
-        {
-          "code": "6515",
-          "name": "穎崴",
-          "lots": 59,
-          "weight": 1.37
-        },
-        {
-          "code": "8210",
-          "name": "勤誠",
-          "lots": 258,
-          "weight": 0.88
+          "lots": 872,
+          "weight": 7.01
         },
         {
           "code": "5536",
           "name": "聖暉",
-          "lots": 253,
-          "weight": 0.79
+          "lots": 3679,
+          "weight": 6.32
         },
         {
-          "code": "2376",
-          "name": "技嘉",
-          "lots": 575,
-          "weight": 0.78
+          "code": "6139",
+          "name": "亞翔",
+          "lots": 4025,
+          "weight": 6.17
         },
         {
-          "code": "2379",
-          "name": "瑞昱",
-          "lots": 282,
-          "weight": 0.74
+          "code": "6669",
+          "name": "緯穎",
+          "lots": 510,
+          "weight": 5.89
         },
         {
-          "code": "1590",
-          "name": "亞德客-KY",
-          "lots": 134,
-          "weight": 0.68
+          "code": "2059",
+          "name": "川湖",
+          "lots": 185,
+          "weight": 4.31
         },
         {
-          "code": "3034",
-          "name": "聯詠",
-          "lots": 361,
-          "weight": 0.67
+          "code": "6223",
+          "name": "旺矽",
+          "lots": 307,
+          "weight": 3.79
         },
         {
-          "code": "2412",
-          "name": "中華電",
-          "lots": 1277,
-          "weight": 0.6
+          "code": "2360",
+          "name": "致茂",
+          "lots": 837,
+          "weight": 3.66
         },
         {
-          "code": "1303",
-          "name": "南亞",
-          "lots": 830,
-          "weight": 0.54
+          "code": "2383",
+          "name": "台光電",
+          "lots": 327,
+          "weight": 3.54
         },
         {
-          "code": "3293",
-          "name": "鈊象",
-          "lots": 205,
-          "weight": 0.54
+          "code": "3105",
+          "name": "穩懋",
+          "lots": 4809,
+          "weight": 3.54
         },
         {
-          "code": "8996",
-          "name": "高力",
-          "lots": 106,
-          "weight": 0.47
+          "code": "2345",
+          "name": "智邦",
+          "lots": 817,
+          "weight": 3.53
+        },
+        {
+          "code": "4958",
+          "name": "臻鼎-KY",
+          "lots": 3178,
+          "weight": 2.89
         },
         {
           "code": "3491",
           "name": "昇達科",
-          "lots": 92,
-          "weight": 0.43
+          "lots": 988,
+          "weight": 2.53
         },
         {
-          "code": "3533",
-          "name": "嘉澤",
-          "lots": 56,
-          "weight": 0.35
+          "code": "3017",
+          "name": "奇鋐",
+          "lots": 407,
+          "weight": 2.48
         },
         {
-          "code": "6415",
-          "name": "矽力*-KY",
-          "lots": 220,
-          "weight": 0.35
+          "code": "6531",
+          "name": "愛普",
+          "lots": 1440,
+          "weight": 2.37
         },
         {
-          "code": "6526",
-          "name": "達發",
-          "lots": 138,
-          "weight": 0.3
+          "code": "6488",
+          "name": "環球晶",
+          "lots": 1134,
+          "weight": 2.21
         },
         {
-          "code": "4904",
-          "name": "遠傳",
-          "lots": 810,
-          "weight": 0.28
+          "code": "3008",
+          "name": "大立光",
+          "lots": 248,
+          "weight": 2.2
         },
         {
-          "code": "5434",
-          "name": "崇越",
-          "lots": 99,
-          "weight": 0.18
+          "code": "2303",
+          "name": "聯電",
+          "lots": 9109,
+          "weight": 2.16
         },
         {
-          "code": "5289",
-          "name": "宜鼎",
-          "lots": 32,
-          "weight": 0.17
+          "code": "3264",
+          "name": "欣銓",
+          "lots": 4780,
+          "weight": 2.1
+        },
+        {
+          "code": "6257",
+          "name": "矽格",
+          "lots": 4821,
+          "weight": 1.95
+        },
+        {
+          "code": "2377",
+          "name": "微星",
+          "lots": 5678,
+          "weight": 1.82
+        },
+        {
+          "code": "3583",
+          "name": "辛耘",
+          "lots": 1158,
+          "weight": 1.58
+        },
+        {
+          "code": "2467",
+          "name": "志聖",
+          "lots": 1505,
+          "weight": 1.57
+        },
+        {
+          "code": "6274",
+          "name": "台燿",
+          "lots": 450,
+          "weight": 1.37
+        },
+        {
+          "code": "8016",
+          "name": "矽創",
+          "lots": 2270,
+          "weight": 1.36
+        },
+        {
+          "code": "3702",
+          "name": "大聯大",
+          "lots": 5678,
+          "weight": 1.33
+        },
+        {
+          "code": "3711",
+          "name": "日月光投控",
+          "lots": 1016,
+          "weight": 1.21
+        },
+        {
+          "code": "7769",
+          "name": "鴻勁",
+          "lots": 93,
+          "weight": 1.2
+        },
+        {
+          "code": "2316",
+          "name": "楠梓電",
+          "lots": 3471,
+          "weight": 1.08
+        },
+        {
+          "code": "5274",
+          "name": "信驊",
+          "lots": 29,
+          "weight": 1.0
+        },
+        {
+          "code": "3036",
+          "name": "文曄",
+          "lots": 2404,
+          "weight": 0.98
+        },
+        {
+          "code": "8996",
+          "name": "高力",
+          "lots": 382,
+          "weight": 0.93
+        },
+        {
+          "code": "1785",
+          "name": "光洋科",
+          "lots": 4384,
+          "weight": 0.91
+        },
+        {
+          "code": "2327",
+          "name": "國巨",
+          "lots": 696,
+          "weight": 0.88
+        },
+        {
+          "code": "2351",
+          "name": "順德",
+          "lots": 2316,
+          "weight": 0.76
+        },
+        {
+          "code": "2472",
+          "name": "立隆電",
+          "lots": 1533,
+          "weight": 0.74
+        },
+        {
+          "code": "6278",
+          "name": "台表科",
+          "lots": 2310,
+          "weight": 0.74
+        },
+        {
+          "code": "3529",
+          "name": "力旺",
+          "lots": 93,
+          "weight": 0.48
+        },
+        {
+          "code": "6831",
+          "name": "邁科",
+          "lots": 300,
+          "weight": 0.39
+        },
+        {
+          "code": "6239",
+          "name": "力成",
+          "lots": 710,
+          "weight": 0.38
+        },
+        {
+          "code": "2376",
+          "name": "技嘉",
+          "lots": 443,
+          "weight": 0.33
         },
         {
           "code": "2451",
           "name": "創見",
-          "lots": 161,
-          "weight": 0.17
+          "lots": 521,
+          "weight": 0.3
         },
         {
-          "code": "3260",
-          "name": "威剛",
-          "lots": 115,
-          "weight": 0.16
+          "code": "2885",
+          "name": "元大金",
+          "lots": 2128,
+          "weight": 0.28
         },
         {
-          "code": "8299",
-          "name": "群聯",
-          "lots": 19,
-          "weight": 0.15
+          "code": "6187",
+          "name": "萬潤",
+          "lots": 91,
+          "weight": 0.22
         },
         {
-          "code": "2458",
-          "name": "義隆",
-          "lots": 175,
-          "weight": 0.09
+          "code": "6446",
+          "name": "藥華藥",
+          "lots": 42,
+          "weight": 0.12
+        },
+        {
+          "code": "3231",
+          "name": "緯創",
+          "lots": 91,
+          "weight": 0.03
+        },
+        {
+          "code": "6177",
+          "name": "達麗",
+          "lots": 194,
+          "weight": 0.02
+        },
+        {
+          "code": "3443",
+          "name": "創意",
+          "lots": 1,
+          "weight": 0.01
+        },
+        {
+          "code": "4441",
+          "name": "振大環球",
+          "lots": 4,
+          "weight": 0.0
+        },
+        {
+          "code": "3706",
+          "name": "神達",
+          "lots": 1,
+          "weight": 0.0
+        },
+        {
+          "code": "2886",
+          "name": "兆豐金",
+          "lots": 1,
+          "weight": 0.0
+        },
+        {
+          "code": "2368",
+          "name": "金像電",
+          "lots": 2,
+          "weight": 0.0
+        },
+        {
+          "code": "8046",
+          "name": "南電",
+          "lots": 1,
+          "weight": 0.0
+        },
+        {
+          "code": "8358",
+          "name": "金居",
+          "lots": 1,
+          "weight": 0.0
         }
       ],
       "non_stock_positions": []
