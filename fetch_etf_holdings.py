@@ -570,7 +570,7 @@ def _parse_ex_rows(rows, source):
         if not date_iso:
             continue
         # 權/息別: 含「權」代表有配股
-        ex_type = _pick(row, ["權/息", "權息別", "除權息別", "權息", "DividendType"]) or ""
+        ex_type = _pick(row, ["除權息", "權/息", "權息別", "除權息別", "權息", "DividendType"]) or ""
         # 配股率: 優先取明確欄位; 否則由 權值/參考價 推導 (P' = P/(1+r) -> r = 權值/P')
         ratio = _to_float(_pick(row, ["無償配股率", "配股率", "StockRatio"]))
         if ratio is not None and ratio > 1:   # 有些來源以「每千股配N股」或百分比表示
@@ -596,7 +596,8 @@ def fetch_ex_events(session, headers, today_iso, relevant_codes, prev_events):
     print(f"\n[除權息日曆] 抓取官方公告...", flush=True)
     fetched = []
     endpoints = [
-        ("TWSE", "https://openapi.twse.com.tw/v1/exchangeReport/TWT48U"),
+        # TWSE openapi 於改版後移除 TWT48U, 改用官網 rwd 網頁版 API (回傳 {fields, data} 陣列格式)
+        ("TWSE", "https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=json"),
         ("TPEx", "https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost"),
         ("TPEx", "https://www.tpex.org.tw/openapi/v1/tpex_exright"),
     ]
@@ -607,10 +608,16 @@ def fetch_ex_events(session, headers, today_iso, relevant_codes, prev_events):
         try:
             r = session.get(url, headers=headers, timeout=20)
             if r.status_code != 200:
-                print(f"  [{source}] HTTP {r.status_code} ({url.split('/')[-1]})")
+                print(f"  [{source}] HTTP {r.status_code} ({url.split('/')[-1].split('?')[0]})")
                 continue
             data = r.json()
-            rows = data if isinstance(data, list) else data.get("data") or data.get("aaData") or []
+            # 兩種格式: (A) openapi/TPEx -> list[dict] 或 {data:[dict]};
+            #          (B) TWSE 網頁版 -> {fields:[欄名], data:[[值,...]]} 需 zip 成 dict
+            if isinstance(data, dict) and isinstance(data.get("fields"), list) and isinstance(data.get("data"), list):
+                flds = data["fields"]
+                rows = [dict(zip(flds, row)) for row in data["data"] if isinstance(row, list) and len(row) == len(flds)]
+            else:
+                rows = data if isinstance(data, list) else data.get("data") or data.get("aaData") or []
             parsed = _parse_ex_rows(rows, source)
             print(f"  [{source}] 取得 {len(parsed)} 筆除權息事件")
             fetched.extend(parsed)
@@ -824,18 +831,36 @@ def main():
     if len(update_detail) > 5:
         print(f"    ...(還有 {len(update_detail)-5} 檔)")
 
-    # 防呆 3: ETF 數量異常
+    # 防呆 3: ETF 數量異常 (比例門檻 80%)
+    #  - 少數 ETF 抓失敗 (常見: MoneyDJ 對個別檔吐殼頁) 時, 不應讓成功的多數檔陪葬。
+    #  - 規則: 成功檔數 >= 上次的 80% -> 照常寫檔, 缺席檔沿用前日持股並標記 stale;
+    #          低於 80% (大量失敗) 才視為真異常, 不寫檔以免污染 latest.json。
+    KEEP_RATIO = 0.80
     today_etf_count = len(all_etf_data)
-    prev_etf_count = len((prev_snapshot or {}).get("today") or {})
-    if prev_etf_count > 0 and today_etf_count < prev_etf_count:
+    prev_today_map = (prev_snapshot or {}).get("today") or {}
+    prev_etf_count = len(prev_today_map)
+    if prev_etf_count > 0:
         today_keys = set(all_etf_data.keys())
-        prev_keys = set((prev_snapshot or {}).get("today", {}).keys())
-        missing_etfs = prev_keys - today_keys
-        print(f"\n{'='*60}\n🛑 ETF 數量異常偵測\n{'='*60}")
-        print(f"  本次抓到: {today_etf_count} 檔, 上次快照: {prev_etf_count} 檔")
-        print(f"  失聯 ETF: {', '.join(sorted(missing_etfs))}")
-        print(f"  -> 為避免污染 latest.json, 本次不寫檔\n{'='*60}\n")
-        return
+        missing_etfs = set(prev_today_map.keys()) - today_keys
+        if today_etf_count < prev_etf_count * KEEP_RATIO:
+            print(f"\n{'='*60}\n🛑 ETF 數量異常偵測 (低於 {int(KEEP_RATIO*100)}% 門檻)\n{'='*60}")
+            print(f"  本次抓到: {today_etf_count} 檔, 上次快照: {prev_etf_count} 檔 (門檻 {prev_etf_count * KEEP_RATIO:.1f})")
+            print(f"  失聯 ETF: {', '.join(sorted(missing_etfs))}")
+            print(f"  -> 大量失敗, 為避免污染 latest.json, 本次不寫檔\n{'='*60}\n")
+            return
+        if missing_etfs:
+            # 少數缺席: 沿用前日持股 + 標記 stale (前端會依 holdings_date 落後而灰標)
+            for code in missing_etfs:
+                pd = prev_today_map.get(code) or {}
+                all_etf_data[code] = {
+                    "name": pd.get("name", code),
+                    "holdings_date": pd.get("holdings_date"),
+                    "holdings": pd.get("holdings", []),
+                    "skipped_rows": [],
+                    "non_stock_positions_prev": pd.get("non_stock_positions", []),
+                    "stale": True,
+                }
+            print(f"\n  ⚠️ {len(missing_etfs)} 檔本次抓失敗, 沿用前日持股並標記未更新 (未達陪葬門檻): {', '.join(sorted(missing_etfs))}")
 
     # 出清股票補抓
     today_only_count = len(all_stock_codes)
@@ -877,9 +902,11 @@ def main():
                 "name": data["name"],
                 "holdings_date": data["holdings_date"],
                 "holdings": data["holdings"],
+                # 本次未抓到、沿用前日者標記 stale=True, 前端顯示「未更新」
+                "stale": data.get("stale", False),
                 # 期貨/選擇權等非股票部位: 無代號但權重可解析的列 (例: 00404A 的臺股期貨)
                 # 前端據此標示, 避免權重加總不足 100% 造成疑惑
-                "non_stock_positions": [
+                "non_stock_positions": data.get("non_stock_positions_prev") if data.get("stale") else [
                     {"name": r.get("raw_text", ""), "weight": w}
                     for r in data.get("skipped_rows", [])
                     if r.get("reason") == "無代號格式"
