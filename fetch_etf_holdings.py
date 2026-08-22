@@ -556,6 +556,32 @@ def _to_float(s):
         return None
 
 
+def _to_int(s):
+    """解析股數/口數字串 -> int (可為負, 空方部位); 無法解析(如 N/A)回 None"""
+    try:
+        return int(float(str(s).replace(",", "").replace(" ", "")))
+    except (TypeError, ValueError):
+        return None
+
+
+def build_non_stock_positions(skipped_rows):
+    """把期貨/選擇權等無代號但權重可解析的列 -> 標準結構 (含正負股數/口數)。
+    weight 正負: 負代表空方; shares 正負同理 (MoneyDJ 近期開始提供口數, 早期為 N/A)。"""
+    out = []
+    for r in (skipped_rows or []):
+        if r.get("reason") != "無代號格式":
+            continue
+        w = _to_float(r.get("weight_raw"))
+        if w is None:
+            continue
+        out.append({
+            "name": r.get("raw_text", ""),
+            "weight": w,
+            "shares": _to_int(r.get("shares_raw")),   # 口數/股數(原始, 可為負=空方; N/A -> null)
+        })
+    return out
+
+
 def _parse_ex_rows(rows, source):
     """把 TWSE/TPEx 除權息表的原始列 -> 標準事件 dict"""
     events = []
@@ -905,13 +931,9 @@ def main():
                 # 本次未抓到、沿用前日者標記 stale=True, 前端顯示「未更新」
                 "stale": data.get("stale", False),
                 # 期貨/選擇權等非股票部位: 無代號但權重可解析的列 (例: 00404A 的臺股期貨)
-                # 前端據此標示, 避免權重加總不足 100% 造成疑惑
-                "non_stock_positions": data.get("non_stock_positions_prev") if data.get("stale") else [
-                    {"name": r.get("raw_text", ""), "weight": w}
-                    for r in data.get("skipped_rows", [])
-                    if r.get("reason") == "無代號格式"
-                    and (w := _to_float(r.get("weight_raw"))) is not None
-                ],
+                # 前端據此標示, 避免權重加總不足 100%; 含正負口數 (負=空方避險)
+                "non_stock_positions": data.get("non_stock_positions_prev") if data.get("stale")
+                    else build_non_stock_positions(data.get("skipped_rows")),
             }
             for code, data in all_etf_data.items()
         },
