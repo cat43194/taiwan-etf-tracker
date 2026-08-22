@@ -17,6 +17,7 @@ import re
 import sys
 import json
 import time
+import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -49,9 +50,17 @@ HEADERS = {
 # =============================================================
 def fetch_etf_holdings(etf_code, session, retries=3):
     url = MONEYDJ_URL.format(code=etf_code)
+    # 針對 MoneyDJ 加上 Referer 與較完整的瀏覽器標頭 (降低被判定為爬蟲而回殼頁的機率);
+    # 僅用於此請求, 不污染全域 HEADERS (價格/除權息用的是別的站)
+    req_headers = {
+        **HEADERS,
+        "Referer": f"https://www.moneydj.com/ETF/X/Basic/Basic0007A.xdjhtm?etfid={etf_code}.TW",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Upgrade-Insecure-Requests": "1",
+    }
     for attempt in range(retries + 1):
         try:
-            r = session.get(url, headers=HEADERS, timeout=60)
+            r = session.get(url, headers=req_headers, timeout=60)
             r.raise_for_status()
             if r.apparent_encoding:
                 r.encoding = r.apparent_encoding
@@ -732,23 +741,26 @@ def main():
             print(f"FAIL  {e}", flush=True)
             failed.append(code)
         if i < len(ETFS):
-            time.sleep(2)
+            time.sleep(2 + random.uniform(0, 1.5))   # 加抖動, 避免固定節奏被反爬偵測
 
-    # 失敗重試
+    # 失敗重試: 用「全新連線」+ 遞增抖動等候 (若是速率限制/反爬殼頁, 換連線+拉長間隔較易成功)
     if failed:
         print(f"\n  ⚠️ 主迴圈完成, 有 {len(failed)} 檔失敗: {', '.join(failed)}", flush=True)
-        for retry_round in range(1, 3):
+        RETRY_ROUNDS = 3
+        for retry_round in range(1, RETRY_ROUNDS + 1):
             still_failed = list(failed)
             if not still_failed:
                 break
-            print(f"\n  ⟳ 重試第 {retry_round}/2 輪 ({len(still_failed)} 檔): {', '.join(still_failed)}", flush=True)
-            print(f"     等候 15 秒讓 MoneyDJ 喘息...", flush=True)
-            time.sleep(15)
+            wait = 15 + (retry_round - 1) * 12 + random.uniform(0, 5)   # 約 15 / 27 / 39 秒
+            print(f"\n  ⟳ 重試第 {retry_round}/{RETRY_ROUNDS} 輪 ({len(still_failed)} 檔): {', '.join(still_failed)}", flush=True)
+            print(f"     換全新連線, 等候 {wait:.0f} 秒讓 MoneyDJ 喘息...", flush=True)
+            time.sleep(wait)
+            retry_session = requests.Session()   # 全新 session, 不重用可能被限制的連線
             newly_succeeded = []
             for code in still_failed:
                 print(f"     重試 {code}  ", end="", flush=True)
                 try:
-                    data = fetch_etf_holdings(code, session)
+                    data = fetch_etf_holdings(code, retry_session)
                     all_etf_data[code] = data
                     for h in data["holdings"]:
                         all_stock_codes.add(h["code"])
@@ -758,10 +770,14 @@ def main():
                     newly_succeeded.append(code)
                 except Exception as e:
                     print(f"FAIL  {e}", flush=True)
-                time.sleep(3)
+                time.sleep(3 + random.uniform(0, 2))
             for code in newly_succeeded:
                 if code in failed:
                     failed.remove(code)
+            try:
+                retry_session.close()
+            except Exception:
+                pass
             if not failed:
                 print(f"\n  ✅ 重試成功, 所有 ETF 都抓到了", flush=True)
                 break
