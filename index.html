@@ -90,6 +90,7 @@
     <button data-tab="etf" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">ETF 明細</button>
     <button data-tab="stock" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">個股查詢</button>
     <button data-tab="trend" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">📈 趨勢</button>
+    <button data-tab="industry" class="tab-btn px-3 py-2 border-b-2 border-transparent whitespace-nowrap text-slate-400 hover:text-slate-200">🏭 產業流向</button>
   </div>
   <div id="new-etf-banner" class="hidden max-w-7xl mx-auto px-3 sm:px-4 py-2 bg-amber-950/40 border-t border-amber-600/30 text-xs text-amber-300"></div>
   <div id="update-status" class="hidden"></div>
@@ -495,6 +496,66 @@ function buildCashChart(ts) {
   const latest = avg[avg.length - 1];
   const zone = latest.pct > mean + sd ? '<span class="text-amber-300">偏高(保守)</span>' : (latest.pct < mean - sd ? '<span class="text-emerald-300">偏低(積極)</span>' : '<span class="text-slate-300">正常區間</span>');
   return '<div class="text-xs text-slate-400 mb-1">最新全體加權現金水位 <span class="font-semibold text-sky-300">' + latest.pct.toFixed(2) + '%</span>（期間均值 ' + mean.toFixed(2) + '% ± ' + sd.toFixed(2) + '）· 位置: ' + zone + '</div><svg viewBox="0 0 ' + W + ' ' + H + '" class="w-full" style="max-height:280px">' + g + '</svg><div class="mt-1">' + legend + '</div>';
+}
+
+
+// ===== 產業分類 (草表; 校正後可替換此對照) =====
+const INDUSTRY_MAP = {"1102":["傳產/原物料","水泥"],"1216":["內需消費","食品"],"1301":["傳產/原物料","塑化"],"1303":["傳產/原物料","塑化"],"1319":["汽車/運輸","汽車零組件"],"1477":["傳產/原物料","紡織/成衣"],"1519":["機械/自動化/重電","重電/電力設備"],"1560":["半導體","半導體材料"],"1590":["機械/自動化/重電","自動化/機器人"],"1736":["機械/自動化/重電","運動器材"],"1785":["半導體","半導體材料"],"1795":["生技醫療","製藥"],"1802":["傳產/原物料","玻璃/玻纖"],"1815":["傳產/原物料","玻璃/玻纖"],"2002":["傳產/原物料","鋼鐵"],"2006":["傳產/原物料","鋼鐵"],"2027":["傳產/原物料","鋼鐵"],"2049":["機械/自動化/重電","工具機/傳動元件"],"2059":["電腦/伺服器/週邊","機殼/機構件"],"2204":["汽車/運輸","汽車整車"],"2303":["半導體","晶圓代工"],"2308":["電腦/伺服器/週邊","電源供應器"],"2313":["PCB/載板","PCB"],"2316":["PCB/載板","PCB"],"2317":["電腦/伺服器/週邊","EMS電子代工"],"2327":["電子零組件","被動元件"],"2330":["半導體","晶圓代工"],"2337":["半導體","記憶體製造"],"2344":["半導體","記憶體製造"],"2345":["通訊網路","網通設備"],"2347":["電子零組件","電子零組件(其他)"],"2351":["半導體","半導體材料"],"2357":["電腦/伺服器/週邊","品牌PC/NB"],"2360":["電腦/伺服器/週邊","檢測/量測設備"],"2368":["PCB/載板","PCB"],"2376":["電腦/伺服器/週邊","主機板/顯卡"],"2377":["電腦/伺服器/週邊","主機板/顯卡"],"2379":["半導體","IC設計"],"2382":["電腦/伺服器/週邊","伺服器/AI伺服器"],"2383":["PCB/載板","銅箔基板(CCL)"],"2385":["電腦/伺服器/週邊","電腦週邊"],"2393":["電子零組件","LED"],"2395":["電腦/伺服器/週邊","工業電腦"],"2404":["營建/工程","無塵室/廠務工程"],"2408":["半導體","記憶體製造"],"2412":["通訊網路","電信服務"],"2426":["電子零組件","LED"],"2439":["電子零組件","電聲元件"],"2449":["半導體","IC封測"],"2451":["半導體","記憶體模組"],"2454":["半導體","IC設計"],"2455":["半導體","化合物半導體"],"2464":["機械/自動化/重電","自動化/機器人"],"2467":["半導體","半導體設備"],"2472":["電子零組件","被動元件"],"2474":["電腦/伺服器/週邊","機殼/機構件"],"2481":["半導體","功率/分離式元件"],"2486":["電子零組件","LED"],"2492":["電子零組件","被動元件"],"2548":["營建/工程","營建/資產"],"2603":["汽車/運輸","航運-貨櫃"],"2606":["汽車/運輸","航運-散裝"],"2609":["汽車/運輸","航運-貨櫃"],"2615":["汽車/運輸","航運-貨櫃"],"2618":["汽車/運輸","航空"],"2637":["汽車/運輸","航運-散裝"],"2645":["汽車/運輸","航太維修(MRO)"],"2727":["內需消費","餐飲"],"2731":["內需消費","旅遊"],"2881":["金融","金控"],"2882":["金融","金控"],"2883":["金融","金控"],"2884":["金融","金控"],"2885":["金融","金控"],"2886":["金融","金控"],"2887":["金融","金控"],"2890":["金融","金控"],"2891":["金融","金控"],"2892":["金融","金控"],"2912":["內需消費","零售/量販"],"3005":["電腦/伺服器/週邊","工業電腦"],"3006":["半導體","IC設計"],"3008":["光電/顯示","光學鏡頭"],"3010":["傳產/原物料","化工/材料"],"3017":["電腦/伺服器/週邊","散熱"],"3023":["電子零組件","連接器/線束"],"3026":["電子零組件","被動元件"],"3034":["半導體","IC設計"],"3036":["電子零組件","電子零組件(其他)"],"3037":["PCB/載板","ABF/IC載板"],"3042":["電子零組件","石英/晶振元件"],"3044":["PCB/載板","PCB"],"3045":["通訊網路","電信服務"],"3081":["光電/顯示","光通訊"],"3090":["電子零組件","電子零組件(其他)"],"3105":["半導體","化合物半導體"],"3131":["半導體","半導體設備"],"3163":["光電/顯示","光通訊"],"3167":["機械/自動化/重電","自動化/機器人"],"3189":["PCB/載板","ABF/IC載板"],"3211":["電腦/伺服器/週邊","電池模組"],"3227":["半導體","IC設計"],"3231":["電腦/伺服器/週邊","伺服器/AI伺服器"],"3260":["半導體","記憶體模組"],"3264":["半導體","IC封測"],"3265":["半導體","IC封測"],"3293":["內需消費","遊戲"],"3324":["電腦/伺服器/週邊","散熱"],"3357":["電子零組件","電子零組件(其他)"],"3363":["光電/顯示","光通訊"],"3374":["半導體","IC封測"],"3376":["電腦/伺服器/週邊","樞紐/轉軸"],"3406":["光電/顯示","光學鏡頭"],"3443":["半導體","IC設計"],"3481":["光電/顯示","面板"],"3491":["光電/顯示","光通訊"],"3526":["電子零組件","連接器/線束"],"3529":["半導體","矽智財(IP)"],"3533":["電子零組件","連接器/線束"],"3583":["半導體","半導體設備"],"3592":["半導體","IC設計"],"3596":["通訊網路","網通設備"],"3653":["電腦/伺服器/週邊","散熱"],"3661":["半導體","IC設計"],"3665":["電子零組件","連接器/線束"],"3693":["電腦/伺服器/週邊","機殼/機構件"],"3702":["電子零組件","電子零組件(其他)"],"3706":["電腦/伺服器/週邊","伺服器/AI伺服器"],"3711":["半導體","IC封測"],"4105":["生技醫療","製藥"],"4441":["傳產/原物料","紡織/成衣"],"4576":["機械/自動化/重電","自動化/機器人"],"4583":["機械/自動化/重電","自動化/機器人"],"4722":["傳產/原物料","化工/材料"],"4746":["生技醫療","原料藥/CDMO"],"4749":["半導體","半導體材料"],"4764":["傳產/原物料","化工/材料"],"4766":["傳產/原物料","化工/材料"],"4904":["通訊網路","電信服務"],"4915":["電腦/伺服器/週邊","EMS電子代工"],"4919":["半導體","IC設計"],"4938":["電腦/伺服器/週邊","EMS電子代工"],"4958":["PCB/載板","軟板(FPC)"],"4961":["半導體","IC設計"],"4966":["半導體","IC設計"],"4979":["光電/顯示","光通訊"],"4991":["半導體","化合物半導體"],"5269":["半導體","IC設計"],"5274":["半導體","IC設計"],"5289":["半導體","記憶體模組"],"5347":["半導體","晶圓代工"],"5434":["半導體","半導體材料"],"5439":["PCB/載板","PCB"],"5534":["營建/工程","營建/資產"],"5536":["營建/工程","無塵室/廠務工程"],"5871":["金融","租賃"],"5876":["金融","銀行"],"5904":["內需消費","零售/量販"],"6116":["光電/顯示","面板"],"6121":["電腦/伺服器/週邊","電池模組"],"6138":["半導體","IC設計"],"6139":["營建/工程","無塵室/廠務工程"],"6146":["其他/服務","電子檢測/認證"],"6147":["半導體","IC封測"],"6173":["電子零組件","被動元件"],"6176":["光電/顯示","背光模組"],"6177":["營建/工程","營建/資產"],"6182":["半導體","半導體材料"],"6187":["半導體","半導體設備"],"6191":["PCB/載板","PCB"],"6196":["營建/工程","無塵室/廠務工程"],"6197":["電子零組件","連接器/線束"],"6213":["PCB/載板","銅箔基板(CCL)"],"6223":["半導體","半導體設備"],"6239":["半導體","IC封測"],"6257":["半導體","IC封測"],"6271":["半導體","IC封測"],"6274":["PCB/載板","銅箔基板(CCL)"],"6278":["PCB/載板","PCB"],"6285":["通訊網路","網通設備"],"6291":["半導體","IC設計"],"6409":["電腦/伺服器/週邊","電源供應器"],"6414":["電腦/伺服器/週邊","工業電腦"],"6415":["半導體","IC設計"],"6438":["PCB/載板","PCB設備/耗材"],"6442":["光電/顯示","光通訊"],"6446":["生技醫療","製藥"],"6451":["半導體","IC封測"],"6488":["半導體","半導體材料"],"6510":["半導體","半導體測試介面"],"6515":["半導體","半導體測試介面"],"6526":["半導體","IC設計"],"6531":["半導體","IC設計"],"6584":["電子零組件","電子零組件(其他)"],"6592":["金融","租賃"],"6640":["半導體","半導體設備"],"6669":["電腦/伺服器/週邊","伺服器/AI伺服器"],"6670":["機械/自動化/重電","機械/機電"],"6679":["半導體","IC設計"],"6683":["半導體","半導體測試介面"],"6715":["電子零組件","電子零組件(其他)"],"6768":["電腦/伺服器/週邊","散熱"],"6770":["半導體","晶圓代工"],"6782":["生技醫療","醫療器材"],"6805":["電腦/伺服器/週邊","樞紐/轉軸"],"6830":["半導體","半導體檢測分析"],"6831":["電子零組件","電子零組件(其他)"],"6890":["傳產/原物料","製鞋/鞋材"],"6944":["其他/服務","其他"],"7734":["半導體","半導體設備"],"7750":["機械/自動化/重電","自動化/機器人"],"7751":["半導體","半導體設備"],"7769":["半導體","半導體設備"],"7828":["其他/服務","其他"],"8016":["半導體","IC設計"],"8021":["PCB/載板","PCB設備/耗材"],"8028":["半導體","半導體材料"],"8039":["PCB/載板","軟板(FPC)"],"8046":["PCB/載板","ABF/IC載板"],"8064":["機械/自動化/重電","自動化/機器人"],"8069":["光電/顯示","電子紙"],"8081":["半導體","IC設計"],"8112":["電子零組件","電子零組件(其他)"],"8150":["半導體","IC封測"],"8155":["PCB/載板","PCB"],"8210":["電腦/伺服器/週邊","機殼/機構件"],"8261":["半導體","功率/分離式元件"],"8299":["半導體","IC設計"],"8358":["PCB/載板","銅箔"],"8454":["內需消費","電商"],"8464":["內需消費","家居/家用"],"8996":["機械/自動化/重電","機械/機電"],"9802":["傳產/原物料","製鞋/鞋材"],"9907":["內需消費","食品"],"9910":["傳產/原物料","製鞋/鞋材"],"9938":["傳產/原物料","製鞋/鞋材"],"9939":["傳產/原物料","包裝容器"],"9941":["金融","租賃"],"9945":["營建/工程","營建/資產"],"9958":["傳產/原物料","鋼鐵"]};
+function industryOf(code) { const e = INDUSTRY_MAP[code]; return e ? { broad: e[0], fine: e[1] } : { broad: '未分類', fine: '未分類' }; }
+let industryLevel = 'broad';   // 'broad' 大分類 | 'fine' 細分類
+let industrySelected = null;   // 點選的產業 -> 顯示成分股明細
+function setIndustryLevel(v) { industryLevel = v; industrySelected = null; render(); }
+function selectIndustry(name) { industrySelected = (industrySelected === name ? null : name); render(); }
+function computeIndustryFlow(flows, level) {
+  const map = {};
+  let unclassified = 0;
+  flows.forEach(function(f) {
+    if (!f.diff) return;
+    const ind = industryOf(f.code);
+    const key = level === 'broad' ? ind.broad : ind.fine;
+    if (key === '未分類') unclassified++;
+    if (!map[key]) map[key] = { name: key, netValue: 0, netLots: 0, buyValue: 0, sellValue: 0, stocks: [] };
+    const m = map[key];
+    m.netLots += f.diff;
+    if (f.diff_value != null) { m.netValue += f.diff_value; if (f.diff_value > 0) m.buyValue += f.diff_value; else m.sellValue += f.diff_value; }
+    m.stocks.push(f);
+  });
+  return { list: Object.values(map).sort(function(a, b) { return b.netValue - a.netValue; }), unclassified: unclassified };
+}
+function renderIndustryFlow(flows) {
+  const res = computeIndustryFlow(flows, industryLevel);
+  const list = res.list;
+  const maxAbs = Math.max(1, ...list.map(function(x) { return Math.abs(x.netValue); }));
+  const lvlBtn = function(v, lab) { return '<button onclick="setIndustryLevel(\'' + v + '\')" class="px-2.5 py-1 text-xs rounded ' + (industryLevel === v ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700') + '">' + lab + '</button>'; };
+  let html = '<h2 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3">🏭 產業資金流向 <span class="text-xs text-slate-500 font-normal">(今日 vs 前日，依變動金額)</span></h2>';
+  html += '<div class="text-xs text-slate-500 mb-3">💡 綠=資金淨流入該產業 · 紅=淨流出 · 已做除權校正並排除首日新 ETF · 點產業看成分股</div>';
+  html += '<div class="flex items-center gap-1.5 mb-3 flex-wrap"><span class="text-xs text-slate-500">分類層級:</span>' + lvlBtn('broad', '大分類') + lvlBtn('fine', '細分類(50+)') + (res.unclassified ? '<span class="text-xs text-amber-400 ml-2">⚠️ ' + res.unclassified + ' 檔未分類</span>' : '') + '</div>';
+  html += '<div class="bg-slate-900 border border-slate-800 rounded-lg divide-y divide-slate-800">';
+  list.forEach(function(ind) {
+    const pct = Math.abs(ind.netValue) / maxAbs * 100;
+    const pos = ind.netValue >= 0;
+    const barColor = pos ? 'bg-emerald-500/70' : 'bg-rose-500/70';
+    const valColor = pos ? 'text-emerald-400' : 'text-rose-400';
+    const sel = industrySelected === ind.name;
+    html += '<div class="cursor-pointer hover:bg-slate-800/40" onclick="selectIndustry(&quot;' + esc(ind.name) + '&quot;)">';
+    html += '<div class="px-3 py-2 flex items-center gap-3">';
+    html += '<div class="w-28 sm:w-36 flex-shrink-0 text-sm text-slate-200 truncate">' + (sel ? '▾ ' : '') + esc(ind.name) + '</div>';
+    html += '<div class="flex-1 min-w-0"><div class="h-4 rounded ' + barColor + '" style="width:' + Math.max(2, pct) + '%"></div></div>';
+    html += '<div class="w-24 sm:w-28 text-right flex-shrink-0"><div class="num text-sm font-semibold ' + valColor + '">' + (pos ? '+' : '') + fmtM(ind.netValue) + '</div><div class="text-xs text-slate-500">' + ind.stocks.length + ' 檔</div></div>';
+    html += '</div>';
+    if (sel) {
+      const buys = ind.stocks.filter(function(s) { return s.diff > 0; }).sort(function(a, b) { return (b.diff_value || 0) - (a.diff_value || 0); }).slice(0, 10);
+      const sells = ind.stocks.filter(function(s) { return s.diff < 0; }).sort(function(a, b) { return (a.diff_value || 0) - (b.diff_value || 0); }).slice(0, 10);
+      const rowSt = function(s) { const p = s.diff_value != null && s.diff_value > 0; return '<div class="flex items-center justify-between px-2 py-1 text-xs hover:bg-slate-800/60" onclick="event.stopPropagation();openStockModal(&quot;' + esc(s.code) + '&quot;)"><span class="text-slate-300 truncate stock-link">' + esc(s.name) + ' <span class="text-slate-600">' + esc(s.code) + '</span></span><span class="num ' + (p ? 'text-emerald-400' : 'text-rose-400') + ' flex-shrink-0 ml-2">' + (s.diff > 0 ? '+' : '') + fmt(s.diff) + '張 · ' + (s.diff_value != null ? ((p ? '+' : '') + fmtM(s.diff_value)) : '-') + '</span></div>'; };
+      html += '<div class="px-3 pb-3 bg-slate-950/40"><div class="grid sm:grid-cols-2 gap-3 pt-2">';
+      html += '<div><div class="text-xs text-emerald-400 mb-1 font-semibold">買超 ' + buys.length + '</div>' + (buys.map(rowSt).join('') || '<div class="text-xs text-slate-600 px-2">—</div>') + '</div>';
+      html += '<div><div class="text-xs text-rose-400 mb-1 font-semibold">賣超 ' + sells.length + '</div>' + (sells.map(rowSt).join('') || '<div class="text-xs text-slate-600 px-2">—</div>') + '</div>';
+      html += '</div></div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
 }
 
 function renderTrend() {
@@ -926,7 +987,7 @@ function renderModal() {
   const exNote = EX_ADJ[modalStock] ? ' <span class="text-violet-300 text-[10px]">(⚙️ 配股 ' + (EX_ADJ[modalStock].ratio * 100).toFixed(2) + '% 已校正，比較基準 ' + fmt(adjPrevLots) + ' 張)</span>' : (EX_DIV[modalStock] ? ' <span class="text-slate-400 text-[10px]">(除息日 ' + esc(EX_DIV[modalStock].date) + ')</span>' : '');
   const diffSpanColor = diff > 0 ? 'text-emerald-400' : (diff < 0 ? 'text-rose-400' : 'text-slate-500');
   const diffSpanText = diff !== 0 ? (diff > 0 ? '▲ +' : '▼ ') + fmt(Math.abs(diff)) : '— 持平';
-  const headerHtml = '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex items-baseline gap-2 flex-wrap"><span class="font-bold text-lg sm:text-xl">' + esc(stock.name) + '</span><span class="text-xs sm:text-sm text-slate-400">' + esc(stock.code) + '</span></div><div class="text-xs text-slate-400 mt-1 leading-relaxed">合計 <span class="text-slate-200 font-semibold">' + fmt(stock.total_lots) + '</span> 張 · <span class="text-amber-400">' + stock.etf_count + '</span> 檔 ETF 持有 · 收盤 ' + (stock.price ? fmt(stock.price, 2) : 'N/A') + ' · 市值 <span class="text-amber-400">' + fmtM(stock.market_value) + '</span></div><div class="text-xs mt-1"><span class="text-slate-500">前日合計:</span> <span class="num">' + fmt(prevLots) + '</span> 張 <span class="ml-2 font-semibold ' + diffSpanColor + '">' + diffSpanText + ' 張</span>' + exNote + '</div></div><button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button></div>';
+  const headerHtml = '<div class="p-3 sm:p-4 border-b border-slate-700 flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex items-baseline gap-2 flex-wrap"><span class="font-bold text-lg sm:text-xl">' + esc(stock.name) + '</span><span class="text-xs sm:text-sm text-slate-400">' + esc(stock.code) + '</span><span class="text-[10px] bg-sky-600/25 text-sky-300 px-1.5 py-0.5 rounded">' + esc(industryOf(stock.code).fine) + '</span></div><div class="text-xs text-slate-400 mt-1 leading-relaxed">合計 <span class="text-slate-200 font-semibold">' + fmt(stock.total_lots) + '</span> 張 · <span class="text-amber-400">' + stock.etf_count + '</span> 檔 ETF 持有 · 收盤 ' + (stock.price ? fmt(stock.price, 2) : 'N/A') + ' · 市值 <span class="text-amber-400">' + fmtM(stock.market_value) + '</span></div><div class="text-xs mt-1"><span class="text-slate-500">前日合計:</span> <span class="num">' + fmt(prevLots) + '</span> 張 <span class="ml-2 font-semibold ' + diffSpanColor + '">' + diffSpanText + ' 張</span>' + exNote + '</div></div><button onclick="closeStockModal()" class="text-slate-400 hover:text-white text-3xl leading-none px-2 flex-shrink-0">×</button></div>';
   const tabHtml = '<div class="flex gap-1 px-3 sm:px-4 pt-2 border-b border-slate-700 bg-slate-900/50"><button onclick="setStockModalTab(\'holdings\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'holdings' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📋 今日持有</button><button onclick="setStockModalTab(\'history\')" class="px-3 py-2 text-xs sm:text-sm border-b-2 ' + (stockModalTab === 'history' ? 'border-amber-500 text-amber-400 font-semibold' : 'border-transparent text-slate-400 hover:text-slate-200') + '">📈 歷史趨勢</button></div>';
   let bodyHtml = stockModalTab === 'holdings' ? renderModalHoldings(stock, etfs) : renderModalHistory(stock);
   content.innerHTML = headerHtml + tabHtml + bodyHtml + '<div class="p-3 border-t border-slate-700 bg-slate-900/50 text-xs text-slate-500 text-center">按 ESC 鍵或點擊外部區域關閉</div>';
@@ -1092,6 +1153,7 @@ function render() {
   else if (currentTab === 'etf') { main.innerHTML = renderETF(); bindEtf(); }
   else if (currentTab === 'stock') { main.innerHTML = renderStock(todayAgg, prevAgg); bindStock(todayAgg, prevAgg); }
   else if (currentTab === 'trend') { main.innerHTML = renderTrend(); }
+  else if (currentTab === 'industry') { main.innerHTML = renderIndustryFlow(computeFlows(DATA.today, DATA.prev || {}, DATA.prices || {}, NEW_ETFS)); }
 }
 
 function renderOverview(todayAgg, prevAgg, buy, sell, mv, prevMvRank) {
@@ -1346,7 +1408,11 @@ function renderETF() {
   // 非股票部位 (期貨/選擇權等, 無代號被排除於持股表之外) 註記, 說明權重加總為何不足 100%
   const nonStock = (!isMulti && DATA.today[selectedEtf] && DATA.today[selectedEtf].non_stock_positions) || [];
   const nonStockNote = nonStock.length
-    ? '<div class="text-xs text-violet-300 mt-1">📐 另有非股票部位（期貨/選擇權等）合計 ' + nonStock.reduce((s, p) => s + (p.weight || 0), 0).toFixed(2) + '%：' + nonStock.map(p => esc(p.name) + ' ' + (p.weight > 0 ? '+' : '') + p.weight + '%').join('、') + '，不列入持股表與買賣超</div>' : '';
+    ? '<div class="text-xs text-violet-300 mt-1">📐 另有非股票部位（期貨/選擇權等）合計 ' + nonStock.reduce((s, p) => s + (p.weight || 0), 0).toFixed(2) + '%：' + nonStock.map(function(p) {
+        const dir = (p.shares != null && p.shares !== 0) ? (p.shares > 0 ? '<span class="text-emerald-400">多</span>' : '<span class="text-rose-400">空</span>') : (p.weight < 0 ? '<span class="text-rose-400">空</span>' : '');
+        const qty = (p.shares != null) ? ' ' + fmt(Math.abs(p.shares)) + '口' : '';
+        return esc(p.name) + ' ' + (p.weight > 0 ? '+' : '') + p.weight + '%' + qty + (dir ? '(' + dir + ')' : '');
+      }).join('、') + '，不列入持股表與買賣超</div>' : '';
   // 估計規模 / 現金水位 / 今日申贖 徽章
   const aumSt = !isMulti ? AUM_STATS[selectedEtf] : null;
   let aumNote = '';
