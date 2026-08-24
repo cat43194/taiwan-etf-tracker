@@ -35,6 +35,17 @@ ETFS = [
 
 MONEYDJ_URL = "https://www.moneydj.com/ETF/X/Basic/Basic0007B.xdjhtm?etfid={code}.TW"
 
+# =============================================================
+# 投信官網直抓 (PCF 一手來源, 比 MoneyDJ 快且穩)
+#  統一投信 ezmoney: 持股 JSON 直接內嵌在 Info 頁 HTML, requests 即可取得, 無殼頁問題。
+#  fundCode 無規則, 需人工維護對照 (新增統一 ETF 時到其頁面看網址列的 fundCode=)。
+# =============================================================
+EZMONEY_URL = "https://www.ezmoney.com.tw/ETF/Fund/Info?fundCode={fc}&tabName=asset"
+UNIFIED_FUNDCODE = {
+    "00981A": "49YTW",   # 主動統一台股增長
+    "00403A": "63YTW",   # 主動統一升級50
+}
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -43,6 +54,60 @@ HEADERS = {
     ),
     "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
 }
+
+
+# =============================================================
+# 統一投信 ezmoney 持股抓取 (JSON 內嵌於 HTML)
+# =============================================================
+def fetch_etf_holdings_unified(etf_code, fund_code, session):
+    import html as _html
+    url = EZMONEY_URL.format(fc=fund_code)
+    req_headers = {**HEADERS, "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"}
+    r = session.get(url, headers=req_headers, timeout=40)
+    r.raise_for_status()
+    if r.apparent_encoding:
+        r.encoding = r.apparent_encoding
+    dec = _html.unescape(r.text)
+
+    objs = re.findall(r'\{[^{}]*"DetailCode":[^{}]*\}', dec)
+    holdings, skipped = [], []
+    tran_date = None
+    for o in objs:
+        try:
+            d = json.loads(o)
+        except Exception:
+            continue
+        code = (d.get("DetailCode") or "").strip()
+        name = (d.get("DetailName") or "").strip()
+        share = d.get("Share")
+        rate = d.get("NavRate")
+        asset = d.get("AssetCode")
+        if not tran_date and d.get("TranDate"):
+            tran_date = d["TranDate"][:10].replace("-", "/")   # 2026-08-21 -> 2026/08/21
+        is_stock = bool(re.fullmatch(r"\d{4,6}[A-Z]?", code)) and asset == "ST"
+        if is_stock:
+            holdings.append({"code": code, "name": name,
+                             "lots": round((share or 0) / 1000, 3), "weight": rate or 0})
+        else:
+            pos = (d.get("Position") or "").strip()
+            mth = (d.get("MTH") or "").strip()
+            label = name + (f" {mth}" if mth else "") + (f"({pos})" if pos else "")
+            skipped.append({"raw_text": label,
+                            "weight_raw": str(rate) if rate is not None else "N/A",
+                            "shares_raw": str(int(share)) if share is not None else "N/A",
+                            "reason": "無代號格式"})
+
+    if not holdings:
+        raise RuntimeError("統一頁面未解析到持股 (可能改版或殼頁)")
+
+    # ETF 名稱: 從頁面抓 "代號 + 主動xxx"; 失敗留 None (下游用 ETF_META/代號)
+    etf_name = etf_code
+    m = re.search(re.escape(etf_code) + r"[^\u4e00-\u9fff]{0,20}(主動[\u4e00-\u9fff0-9A-Za-z]{2,15})", r.text)
+    if m:
+        etf_name = m.group(1)
+
+    return {"name": etf_name, "holdings_date": tran_date,
+            "holdings": holdings, "skipped_rows": skipped}
 
 
 # =============================================================
@@ -727,13 +792,23 @@ def main():
     for i, code in enumerate(ETFS, 1):
         print(f"  [{i:2d}/{len(ETFS)}] {code}  ", end="", flush=True)
         try:
-            data = fetch_etf_holdings(code, session)
+            if code in UNIFIED_FUNDCODE:
+                # 統一投信: 優先走 ezmoney (快/穩); 失敗自動退回 MoneyDJ
+                try:
+                    data = fetch_etf_holdings_unified(code, UNIFIED_FUNDCODE[code], session)
+                    src_tag = "[統一]"
+                except Exception as ue:
+                    data = fetch_etf_holdings(code, session)
+                    src_tag = f"[MoneyDJ退回, 統一失敗:{type(ue).__name__}]"
+            else:
+                data = fetch_etf_holdings(code, session)
+                src_tag = ""
             all_etf_data[code] = data
             for h in data["holdings"]:
                 all_stock_codes.add(h["code"])
             skipped_count = len(data.get("skipped_rows", []))
             warn_mark = f"  ⚠️ 跳過 {skipped_count} 列" if skipped_count > 0 else ""
-            print(f"OK  {data['name'][:20]:20s}  ({data['holdings_date']})  {len(data['holdings']):3d} 檔{warn_mark}", flush=True)
+            print(f"OK {src_tag} {(data['name'] or code)[:20]:20s}  ({data['holdings_date']})  {len(data['holdings']):3d} 檔{warn_mark}", flush=True)
             if skipped_count > 0:
                 for row in data["skipped_rows"]:
                     print(f"      └─ 異常列: '{row['raw_text']}' | 權重={row['weight_raw']} | 股數={row['shares_raw']} | 原因={row['reason']}")
